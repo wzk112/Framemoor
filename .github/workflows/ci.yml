@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup toolchain install 1.90.0 --profile minimal --component clippy --component rustfmt
+      - uses: actions/cache@v4
+        with:
+          path: target
+          key: core-${{ runner.os }}-${{ runner.arch }}-1.90-${{ hashFiles('Cargo.lock') }}
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --all-targets --locked
+      - run: cargo build --release --locked
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+
+  desktop:
+    name: Desktop (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install Rust
+        run: rustup toolchain install 1.90.0 --profile minimal --component clippy --component rustfmt
+      - uses: actions/cache@v4
+        with:
+          path: desktop/src-tauri/target
+          key: desktop-${{ runner.os }}-${{ runner.arch }}-1.90-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+      - run: npm ci
+      - run: npm run build
+      - run: python3 scripts/prepare-resources.py
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+  required:
+    name: Required checks
+    if: always()
+    needs: [core, frontend, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all jobs to pass
+        env:
+          CORE: ${{ needs.core.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          DESKTOP: ${{ needs.desktop.result }}
+        run: test "$CORE" = success && test "$FRONTEND" = success && test "$DESKTOP" = success

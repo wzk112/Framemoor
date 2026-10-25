@@ -1,0 +1,17 @@
+[
+  {
+    "source": "DCIM/100EOSR5/IMG_0001.CR3",
+    "destination": "Project/2026-10-25/Photo/RAW/20261025_R5M2_0001.CR3",
+    "group": "photo-0001"
+  },
+  {
+    "source": "XFVC/REEL_0001/CLIP_0001.MP4",
+    "destination": "Project/2026-10-25/Video/HEVC/REEL_0001/CLIP_0001.MP4",
+    "group": "video-0001"
+  },
+  {
+    "source": "XFVC/REEL_0001/CLIP_0001.CPF",
+    "destination": "Project/2026-10-25/Video/HEVC/REEL_0001/CLIP_0001.CPF",
+    "group": "video-0001"
+  }
+]
