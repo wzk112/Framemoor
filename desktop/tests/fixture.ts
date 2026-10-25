@@ -1,9 +1,16 @@
 // Browser-only integration fixture. This entry is excluded from production builds.
 import {mockIPC} from '@tauri-apps/api/mocks';
+import {invoke} from '@tauri-apps/api/core';
 import {emit} from '@tauri-apps/api/event';
 import {defaults, type Options, type Preview, type Task} from '../src/types';
 import {normalizeOptions} from '../src/rules';
 Object.assign(globalThis,{isTauri:true});
+// Tauri supplies its own Notification bridge. Keep the browser fixture independent
+// of the host browser's notification permission (headless Chromium may deny it).
+Object.defineProperties(window.Notification,{
+  permission:{configurable:true,get:()=> 'default'},
+  requestPermission:{configurable:true,value:()=>invoke<NotificationPermission>('plugin:notification|request_permission')},
+});
 const file={path:'DCIM/100EOSR5/IMG_0001.CR3',bytes:41298602,modified_ns:0,kind:'photo',format:'CR3',codec:'RAW',camera:'Canon EOS R5m2',captured:'2026:10:06 18:16:37',offset:'+10:00',issues:[]};
 let current:Task|null=null;let preview:Preview;let saved:unknown;
 Object.assign(globalThis,{readSavedSettings:()=>structuredClone(saved)});

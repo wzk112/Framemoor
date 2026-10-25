@@ -16,7 +16,9 @@ test('appearance overrides the system and import defaults do not alter the curre
   await page.getByRole('dialog').getByRole('button',{name:'浏览…',exact:true}).click();
   await expect(page.getByLabel('默认目标文件夹',{exact:true})).toHaveValue('/default/Camera');
   await page.getByLabel('默认预设',{exact:true}).selectOption('builtin:original');
-  await page.getByLabel('导入完成后通知',{exact:true}).check();
+  const notifications=page.getByLabel('导入完成后通知',{exact:true});
+  await notifications.click();
+  await expect(notifications).toBeChecked();
   await page.getByRole('button',{name:'发送测试通知',exact:true}).click();
   await expect(page.getByText('测试通知已提交。',{exact:true})).toBeVisible();
   await page.getByLabel('导入期间防止自动休眠',{exact:true}).uncheck();
