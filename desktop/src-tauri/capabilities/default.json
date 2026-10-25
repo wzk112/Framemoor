@@ -1,0 +1,14 @@
+{
+  "identifier": "main",
+  "description": "Local main window and native folder dialogs",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission"
+  ]
+}
