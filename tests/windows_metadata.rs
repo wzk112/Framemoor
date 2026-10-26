@@ -31,11 +31,14 @@ fn unicode_long_paths_and_large_argument_batches_read_real_metadata() {
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    let source = scratch.path().join("中文 source");
-    let mut deep = source.clone();
+    // Keep relative paths inside the app's 230-unit portability limit while
+    // making absolute paths long enough to require Windows extended-path I/O.
+    let mut long_root = scratch.path().to_path_buf();
     for index in 0..6 {
-        deep.push(format!("目录_{index}_{}", "a".repeat(72)));
+        long_root.push(format!("目录_{index}_{}", "a".repeat(72)));
     }
+    let source = long_root.join("中文 source");
+    let deep = source.join("DCIM/100TEST");
     fs::create_dir_all(&deep).unwrap();
     let bytes = fs::read(&seed).unwrap();
     for index in 0..70 {
@@ -43,6 +46,14 @@ fn unicode_long_paths_and_large_argument_batches_read_real_metadata() {
         // the actual content must still be identified as PNG, not guessed as RAW.
         fs::write(deep.join(format!("素材_{index:03}.CR3")), &bytes).unwrap();
     }
+    assert!(
+        deep.join("素材_000.CR3")
+            .to_string_lossy()
+            .encode_utf16()
+            .count()
+            * 64
+            > 32_767
+    );
     let catalog = workflow::scan_with_readers(&source, &tool, 4, |_, _| {}).unwrap();
     assert_eq!(catalog.file_count, 70);
     for file in catalog.groups.iter().flat_map(|group| &group.files) {
