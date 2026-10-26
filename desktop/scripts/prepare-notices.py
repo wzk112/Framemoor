@@ -16,7 +16,7 @@ metadata = json.loads(subprocess.check_output([
     "cargo", "metadata", "--format-version", "1", "--locked",
     "--manifest-path", str(desktop / "src-tauri/Cargo.toml"),
     "--filter-platform", "x86_64-pc-windows-msvc",
-], text=True))
+], encoding="utf-8"))
 packages = []
 for package in metadata["packages"]:
     if package.get("source") is None:
@@ -31,7 +31,7 @@ for package in metadata["packages"]:
         shutil.copy2(path, destination / path.name)
     packages.append({"name":package["name"], "version":package["version"], "license":package.get("license"), "repository":package.get("repository"), "notices":[p.name for p in files]})
 # Production npm packages only; collect their original notices, not generated text.
-lock = json.loads((desktop / "package-lock.json").read_text())
+lock = json.loads((desktop / "package-lock.json").read_text(encoding="utf-8"))
 for relative, package in lock["packages"].items():
     if not relative or package.get("dev") or package.get("optional"):
         continue
@@ -45,7 +45,7 @@ for relative, package in lock["packages"].items():
         shutil.copy2(path, destination / path.name)
     packages.append({"name":relative, "version":package["version"], "license":package.get("license"), "notices":[p.name for p in files]})
 (target / "dependencies.json").write_text(json.dumps(packages, indent=2), encoding="utf-8")
-revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, encoding="utf-8").strip()
 (target / "SOURCE.txt").write_text(
     "Framemoor / 泊影 — GPL-3.0-only\nSource revision: " + revision +
     "\nhttps://github.com/wzk112/Framemoor/tree/" + revision +
