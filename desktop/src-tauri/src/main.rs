@@ -74,6 +74,32 @@ fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     core::platform::replace_journal(&temp, path)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod encoding_tests {
+    use super::*;
+
+    #[test]
+    fn persisted_settings_keep_unicode_when_created_and_replaced() -> Result<()> {
+        let scratch =
+            std::env::temp_dir().join(format!("framemoor-{}-中文📷", uuid::Uuid::new_v4()));
+        let result = (|| -> Result<()> {
+            let path = scratch.join("设置_日本語_한국어.json");
+            for language in ["zh", "en"] {
+                let expected = json!({"language":language,"source":"中文/日本語/한국어/العربية/Русский/📷/𠮷",
+                    "presets":[{"name":"繁體 café cafe\u{0301}","rules":{"directory_levels":["{date}_{content}","照片"]}}]});
+                write_json(&path, &expected)?;
+                let bytes = fs::read(&path)?;
+                assert!(std::str::from_utf8(&bytes)?.contains("中文"));
+                assert_eq!(serde_json::from_slice::<Value>(&bytes)?, expected);
+                assert!(!path.with_extension("tmp").exists());
+            }
+            Ok(())
+        })();
+        let _ = fs::remove_dir_all(&scratch);
+        result
+    }
+}
 fn save_task(state: &State, task: &Task) -> Result<()> {
     write_json(
         &state.data.join("tasks").join(&task.id).join("task.json"),

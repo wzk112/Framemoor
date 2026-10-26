@@ -21,3 +21,9 @@
 .env
 .env.*
 !.env.example
+
+/desktop/src-tauri/resources/notices/
+/desktop/native-test-results/
+__pycache__/
+
+/desktop/windows-artifacts/

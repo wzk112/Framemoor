@@ -12,7 +12,7 @@ Object.defineProperties(window.Notification,{
   requestPermission:{configurable:true,value:()=>invoke<NotificationPermission>('plugin:notification|request_permission')},
 });
 const file={path:'DCIM/100EOSR5/IMG_0001.CR3',bytes:41298602,modified_ns:0,kind:'photo',format:'CR3',codec:'RAW',camera:'Canon EOS R5m2',captured:'2026:10:06 18:16:37',offset:'+10:00',issues:[]};
-let current:Task|null=null;let preview:Preview;let saved:unknown;
+let current:Task|null=null;let preview:Preview;let saved:unknown;let exportAttempts=0;
 Object.assign(globalThis,{readSavedSettings:()=>structuredClone(saved)});
 mockIPC(async(cmd,args)=>{
   const p=args as Record<string,any>;
@@ -24,6 +24,8 @@ mockIPC(async(cmd,args)=>{
     case 'plugin:notification|request_permission':return new URLSearchParams(location.search).get('permission')==='denied'?'denied':'granted';
     case 'test_notification':if(new URLSearchParams(location.search).get('notification')==='failed')throw 'unavailable';return;
     case 'plugin:dialog|open':return '/default/Camera';
+    case 'plugin:dialog|save':return '/reports/校验报告_日本語_📷.json';
+    case 'export_report':if(new URLSearchParams(location.search).get('report')==='retry'&&exportAttempts++===0)throw 'Source and destination directories must not overlap';return;
     case 'selection_summary':{
       const o=p.options as Options;const count=o.photos&&(!o.from||o.from<='2026-10-06')&&(!o.to||o.to>='2026-10-06')?1:0;
       return {files:count,groups:count,bytes:file.bytes*count,dates:['2026-10-06']};

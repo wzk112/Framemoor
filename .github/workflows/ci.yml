@@ -78,14 +78,95 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: python3 scripts/prepare-resources.py
+      - name: Test macOS multilingual metadata
+        run: FRAMEMOOR_TEST_EXIFTOOL="$PWD/src-tauri/resources/exiftool/exiftool" cargo test --manifest-path ../Cargo.toml --test metadata_encoding --locked -- --include-ignored --nocapture
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
 
+  windows-desktop:
+    name: Desktop (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install Rust
+        run: rustup toolchain install 1.90.0 --profile minimal --component clippy --component rustfmt
+      - uses: actions/cache/restore@v4
+        id: windows-cache
+        with:
+          path: |
+            desktop/src-tauri/target
+          key: desktop-windows-x64-1.90-edge-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-windows-x64-1.90-driver2.1-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+      - run: npm ci
+      - run: python scripts/prepare-resources.py
+      - run: python scripts/prepare-windows-resources.py
+      - run: python scripts/prepare-notices.py
+      - name: Test Windows Unicode metadata and long paths
+        run: |
+          $env:FRAMEMOOR_TEST_EXIFTOOL = (Resolve-Path src-tauri/resources/exiftool-win/exiftool.exe).Path
+          cargo test --release --manifest-path ../Cargo.toml --test windows_metadata --locked -- --include-ignored
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release --manifest-path ../Cargo.toml --test metadata_encoding --locked -- --include-ignored --nocapture
+      - name: Install test drivers
+        run: |
+          ./scripts/prepare-windows-driver.ps1
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Build Windows NSIS installer
+        id: windows-build
+        run: npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
+      - name: Test native desktop backend
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --locked
+      - name: Install and test the real Windows application
+        run: |
+          $installer = (Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName
+          if (-not $installer) { throw 'NSIS installer was not produced' }
+          python scripts/test-windows-app.py --installer $installer --native-driver $env:FRAMEMOOR_EDGE_DRIVER
+      - name: Prepare downloadable installer and corresponding source
+        run: |
+          New-Item windows-artifacts -ItemType Directory -Force | Out-Null
+          Copy-Item src-tauri/target/release/bundle/nsis/*.exe windows-artifacts/
+          git -C .. archive --format=zip --output=desktop/windows-artifacts/Framemoor-source.zip HEAD
+          Copy-Item src-tauri/resources/notices windows-artifacts/notices -Recurse
+          Get-ChildItem windows-artifacts -File | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          } | Set-Content windows-artifacts/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-native-test-results
+          path: desktop/native-test-results/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/cache/save@v4
+        if: always() && steps.windows-build.outcome == 'success' && steps.windows-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            desktop/src-tauri/target
+          key: ${{ steps.windows-cache.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Framemoor-windows-x64
+          path: desktop/windows-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
   required:
     name: Required checks
     if: always()
-    needs: [core, frontend, desktop]
+    needs: [core, frontend, desktop, windows-desktop]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -94,4 +175,5 @@ jobs:
           CORE: ${{ needs.core.result }}
           FRONTEND: ${{ needs.frontend.result }}
           DESKTOP: ${{ needs.desktop.result }}
-        run: test "$CORE" = success && test "$FRONTEND" = success && test "$DESKTOP" = success
+          WINDOWS_DESKTOP: ${{ needs.windows-desktop.result }}
+        run: test "$CORE" = success && test "$FRONTEND" = success && test "$DESKTOP" = success && test "$WINDOWS_DESKTOP" = success
