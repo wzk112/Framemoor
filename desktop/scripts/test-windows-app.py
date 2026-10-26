@@ -225,7 +225,10 @@ def main():
     assert (install / "notices/LICENSE").is_file()
     source, source_hashes=fixture(root, exiftool)
     expected={name for name in source_hashes if "照片_0002" not in name}
-    environment=dict(os.environ, FRAMEMOOR_DATA_DIR=str(root / "state"), WEBVIEW2_USER_DATA_FOLDER=str(root / "webview"))
+    environment=dict(os.environ, FRAMEMOOR_DATA_DIR=str(root / "state"))
+    # EdgeDriver owns its temporary WebView profile and reads DevToolsActivePort
+    # there. Overriding this folder prevents it from attaching to the app.
+    environment.pop("WEBVIEW2_USER_DATA_FOLDER", None)
     environment.pop("FRAMEMOOR_EXIFTOOL",None);environment.pop("CARD_INGEST_EXIFTOOL",None)
     driver=Driver();process=None
     report={"installer":args.installer.name,"installer_sha256":sha(args.installer),
@@ -276,6 +279,9 @@ def main():
         except Exception:
             report["passed"]=False
             report["error"]=traceback.format_exc()
+            subprocess.run(["powershell", "-NoProfile", "-File",
+                            str(Path(__file__).with_name("capture-windows-diagnostics.ps1")),
+                            "-Results", str(results)], check=False, timeout=30)
             if driver.session:
                 try:
                     (results / "failure-dom.html").write_text(driver.js("return document.documentElement.outerHTML"),encoding="utf-8")
