@@ -6,7 +6,7 @@ Framemoor's GPL-3.0-only license applies to original project code. Third-party d
 
 [ExifTool](https://exiftool.org/) is Copyright 2003–2026 Phil Harvey. Its README licenses it under the same terms as Perl itself (the Perl Artistic License or GPL). The preparation script pins version 13.59, source revision `2200871d9cef988051d2a99d67df3bda6cbb30a8`, from [the upstream repository](https://github.com/exiftool/exiftool/tree/2200871d9cef988051d2a99d67df3bda6cbb30a8).
 
-The script copies the upstream `LICENSE`, `README`, and `lib` with the executable script into the application resource folder. These files must be retained when packaging. Windows builds additionally require the complete official Windows distribution, including its supporting files and notices; do not redistribute only `exiftool.exe`.
+The script copies the upstream `LICENSE`, `README`, and `lib` with the executable script into the application resource folder. These files must be retained when packaging. Windows builds additionally require the complete official Windows distribution, including its supporting files and notices; do not redistribute only `exiftool.exe`. The Windows launcher by Oliver Betz is CC0. Framemoor adds the checked-in `desktop/windows/exiftool-utf8.manifest` to its executable with Microsoft `mt.exe`, retaining long-path support and opting the process into UTF-8 for Unicode installation paths. The archive is verified before this modification; `FRAMEMOOR-PATCH.txt` records it in the bundle. Perl and ExifTool source code are not modified.
 
 ## UI and runtime dependencies
 

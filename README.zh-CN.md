@@ -29,7 +29,7 @@ SHA-256 内容校验**默认开启**。任务会读取源文件内容、检查�
 
 ## 从源码运行
 
-需要 Git、Python 3、Node.js 22.12+（22 LTS 或更新的受支持 LTS）、Rust **1.90.0** 以及 [Tauri 平台依赖](https://v2.tauri.app/start/prerequisites/)。macOS 需要 13 或更高版本及 Xcode 命令行工具，Windows 需要 MSVC 构建工具与 WebView2。仓库包含工具链配置和依赖锁文件。
+需要 Git、Python 3、Node.js 22.12+（22 LTS 或更新的受支持 LTS）、Rust **1.90.0** 以及 [Tauri 平台依赖](https://v2.tauri.app/start/prerequisites/)。macOS 需要 13 或更高版本及 Xcode 命令行工具，Windows 需要 10 1903 或更新版本、包含 Windows SDK 的 MSVC 构建工具与 WebView2。仓库包含工具链配置和依赖锁文件。
 
 ```sh
 git clone https://github.com/wzk112/Framemoor.git
@@ -61,7 +61,7 @@ npm run tauri dev -- --config src-tauri/tauri.windows.conf.json
 npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
 ```
 
-Windows 资源脚本下载完整 ExifTool 13.59 x64 包，并核对固定的 SHA-256，保留配套 Perl 文件和许可证。`prepare-notices.py` 收集安装包需要的依赖声明。安装包生成在 `desktop/src-tauri/target/release/bundle/nsis/`，按当前用户安装。安装包未签名，Windows 可能显示未知发布者或 SmartScreen 提示。
+Windows 资源脚本下载完整 ExifTool 13.59 x64 包，并核对固定的 SHA-256，保留配套 Perl 文件和许可证。脚本为 CC0 启动器加入 UTF-8 进程清单，使其能从中文安装目录加载依赖，不修改系统区域设置。`prepare-notices.py` 收集安装包需要的依赖声明。安装包生成在 `desktop/src-tauri/target/release/bundle/nsis/`，按当前用户安装。安装包未签名，Windows 可能显示未知发布者或 SmartScreen 提示。
 
 成功的 [CI 运行](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml)会提供 **Framemoor-windows-x64** 产物，包含安装包、对应源码、声明和 SHA-256；测试证据保存在 **windows-native-test-results**。CI 产物有保留期限，不是永久发行下载。详情见 [Windows 验证说明](docs/windows-validation.md)。
 

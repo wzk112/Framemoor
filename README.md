@@ -29,7 +29,7 @@ The destination's `.card-ingest` folder stores task state and temporary files; d
 
 ## Build from source
 
-Requirements: Git, Python 3, Node.js 22.12+ (22 LTS or a newer supported LTS), Rust **1.90.0**, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). macOS requires version 13 or later and Xcode command line tools; Windows requires MSVC build tools and WebView2. Toolchain and dependency lockfiles are checked in.
+Requirements: Git, Python 3, Node.js 22.12+ (22 LTS or a newer supported LTS), Rust **1.90.0**, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). macOS requires version 13 or later and Xcode command line tools; Windows requires version 10 1903 or newer, MSVC build tools with the Windows SDK, and WebView2. Toolchain and dependency lockfiles are checked in.
 
 ```sh
 git clone https://github.com/wzk112/Framemoor.git
@@ -61,7 +61,7 @@ npm run tauri dev -- --config src-tauri/tauri.windows.conf.json
 npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
 ```
 
-The Windows resource script downloads the complete ExifTool 13.59 x64 package and verifies its pinned SHA-256. It includes the supporting Perl files and licenses. `prepare-notices.py` collects dependency notices for the installer. The installer is created in `desktop/src-tauri/target/release/bundle/nsis/` and installs for the current user. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.
+The Windows resource script downloads the complete ExifTool 13.59 x64 package and verifies its pinned SHA-256. It includes the supporting Perl files and licenses. It adds a UTF-8 process manifest to the CC0 launcher so it can load its runtime from Chinese installation paths; the system locale is not changed. `prepare-notices.py` collects dependency notices for the installer. The installer is created in `desktop/src-tauri/target/release/bundle/nsis/` and installs for the current user. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.
 
 Successful [CI runs](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml) provide a **Framemoor-windows-x64** artifact containing the installer, corresponding source, notices, and SHA-256 values. Test evidence is in **windows-native-test-results**. These artifacts expire; they are not permanent release downloads. See [Windows validation](docs/windows-validation.md).
 

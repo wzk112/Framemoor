@@ -15,7 +15,7 @@ The required CI gate includes:
 
 `Framemoor-windows-x64` contains the installer, source ZIP, notices, and SHA-256 values. `windows-native-test-results` contains screenshots, driver diagnostics, and a JSON result with OS/WebView versions. A run with failed native checks does not publish the installer artifact. Build caches contain compilation products only; application scan/metadata/checksum caching remains disabled.
 
-The test tools (`tauri-driver`, Microsoft Edge WebDriver, and FFmpeg) run only in CI and are not installed with the app. The bundled ExifTool Windows package is pinned and checksum-verified. Third-party license fallbacks are tied to specific package versions and upstream sources; dependency upgrades require reviewing them.
+The test tools (`tauri-driver`, Microsoft Edge WebDriver, and FFmpeg) run only in CI and are not installed with the app. The original ExifTool Windows package is pinned and checksum-verified before adding the UTF-8 process manifest. The prepared runtime must start from a Chinese installation directory before the app build proceeds. Third-party license fallbacks are tied to specific package versions and upstream sources; dependency upgrades require reviewing them.
 
 ## Remaining validation
 
@@ -36,7 +36,7 @@ This does not certify Windows 10/11 hardware, ARM64, every camera model, non-BMP
 
 `Framemoor-windows-x64` 包含安装包、对应源码、声明和 SHA-256；`windows-native-test-results` 包含截图、驱动日志及记录系统/WebView 版本的 JSON 结果。原生测试失败时不提供安装包产物。构建缓存仅保存编译结果，应用仍不使用扫描、元数据或校验缓存。
 
-测试使用的 `tauri-driver`、Microsoft Edge WebDriver 和 FFmpeg 仅在 CI 运行，不随应用安装。ExifTool Windows 包固定版本并核对哈希。补充许可证记录了对应依赖版本和上游来源，更新依赖时需要一并复核。
+测试使用的 `tauri-driver`、Microsoft Edge WebDriver 和 FFmpeg 仅在 CI 运行，不随应用安装。ExifTool Windows 原始包固定版本并核对哈希，再加入 UTF-8 进程清单。准备后的运行时必须先通过中文安装目录启动检查，才能继续构建应用。补充许可证记录了对应依赖版本和上游来源，更新依赖时需要一并复核。
 
 ## 尚待验证
 
