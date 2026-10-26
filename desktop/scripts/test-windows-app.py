@@ -213,7 +213,10 @@ def main():
     results=args.results.resolve();results.mkdir(parents=True,exist_ok=True)
     root=Path(tempfile.mkdtemp(prefix="framemoor-windows-"))
     install=root / "泊影 App"
-    subprocess.run([str(args.installer.resolve()), "/S", f"/D={install}"], check=True, timeout=180)
+    # NSIS requires /D last and unquoted, even for paths containing spaces.
+    # Pass the raw Windows command line to CreateProcess; no shell is involved.
+    command=subprocess.list2cmdline([str(args.installer.resolve()), "/S"]) + f" /D={install}"
+    subprocess.run(command, check=True, timeout=180)
     binary=install / "framemoor-desktop.exe"
     assert binary.is_file(), list(install.rglob("*.exe"))
     exiftool=install / "exiftool-win/exiftool.exe"
