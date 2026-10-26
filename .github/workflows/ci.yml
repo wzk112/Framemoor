@@ -103,8 +103,8 @@ jobs:
         with:
           path: |
             desktop/src-tauri/target
-            ~/.cargo/bin/tauri-driver.exe
-          key: desktop-windows-x64-1.90-driver2.1-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+          key: desktop-windows-x64-1.90-edge-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-windows-x64-1.90-driver2.1-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
       - run: npm ci
       - run: python scripts/prepare-resources.py
       - run: python scripts/prepare-windows-resources.py
@@ -115,10 +115,6 @@ jobs:
           cargo test --release --manifest-path ../Cargo.toml --test windows_metadata --locked -- --include-ignored
       - name: Install test drivers
         run: |
-          if (-not (Get-Command tauri-driver -ErrorAction SilentlyContinue)) {
-            cargo install tauri-driver --version 2.1.0 --locked
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
           ./scripts/prepare-windows-driver.ps1
           if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
             choco install ffmpeg --yes --no-progress
@@ -155,7 +151,6 @@ jobs:
         with:
           path: |
             desktop/src-tauri/target
-            ~/.cargo/bin/tauri-driver.exe
           key: ${{ steps.windows-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:

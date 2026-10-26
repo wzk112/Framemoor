@@ -2,7 +2,7 @@
 
 ## Build and test scope
 
-The `Desktop (Windows x64)` CI job builds an unsigned, release-mode NSIS installer on GitHub's `windows-latest` VM. It installs that exact package into a temporary directory, runs the installed application through `tauri-driver` and Microsoft Edge WebDriver, and uninstalls it. The application uses real WebView2 and real Tauri IPC; these checks do not mock backend commands. Files are generated in disposable directories, and no personal media is used.
+The `Desktop (Windows x64)` CI job builds an unsigned, release-mode NSIS installer on GitHub's `windows-latest` VM. It installs that exact package into a temporary directory, runs the installed application through Microsoft Edge WebDriver attached to the running WebView2 instance, and uninstalls it. The application uses real WebView2 and real Tauri IPC; these checks do not mock backend commands. Files are generated in disposable directories, and no personal media is used.
 
 The required CI gate includes:
 
@@ -15,7 +15,7 @@ The required CI gate includes:
 
 `Framemoor-windows-x64` contains the installer, source ZIP, notices, and SHA-256 values. `windows-native-test-results` contains screenshots, driver diagnostics, and a JSON result with OS/WebView versions. A run with failed native checks does not publish the installer artifact. Build caches contain compilation products only; application scan/metadata/checksum caching remains disabled.
 
-The test tools (`tauri-driver`, Microsoft Edge WebDriver, and FFmpeg) run only in CI and are not installed with the app. The original ExifTool Windows package is pinned and checksum-verified before adding the UTF-8 process manifest. The prepared runtime must start from a Chinese installation directory before the app build proceeds. Third-party license fallbacks are tied to specific package versions and upstream sources; dependency upgrades require reviewing them.
+The test tools (Microsoft Edge WebDriver and FFmpeg) run only in CI and are not installed with the app. The original ExifTool Windows package is pinned and checksum-verified before adding the UTF-8 process manifest. The prepared runtime must start from a Chinese installation directory before the app build proceeds. Third-party license fallbacks are tied to specific package versions and upstream sources; dependency upgrades require reviewing them.
 
 ## Remaining validation
 
@@ -23,7 +23,7 @@ This does not certify Windows 10/11 hardware, ARM64, every camera model, non-BMP
 
 ## 构建与测试范围
 
-`Desktop (Windows x64)` 在 GitHub 的 `windows-latest` 虚拟机上构建未签名的 Release 模式 NSIS 安装包，再将该安装包安装到临时目录，用 `tauri-driver` 和 Microsoft Edge WebDriver 操作真实 WebView2 窗口，最后卸载。测试调用真实 Tauri IPC，不模拟后端命令。素材在临时目录生成，不使用个人照片或视频。
+`Desktop (Windows x64)` 在 GitHub 的 `windows-latest` 虚拟机上构建未签名的 Release 模式 NSIS 安装包，再将该安装包安装到临时目录，用 Microsoft Edge WebDriver 连接已启动的真实 WebView2 窗口，最后卸载。测试调用真实 Tauri IPC，不模拟后端命令。素材在临时目录生成，不使用个人照片或视频。
 
 必需的 CI 检查包括：
 
@@ -36,7 +36,7 @@ This does not certify Windows 10/11 hardware, ARM64, every camera model, non-BMP
 
 `Framemoor-windows-x64` 包含安装包、对应源码、声明和 SHA-256；`windows-native-test-results` 包含截图、驱动日志及记录系统/WebView 版本的 JSON 结果。原生测试失败时不提供安装包产物。构建缓存仅保存编译结果，应用仍不使用扫描、元数据或校验缓存。
 
-测试使用的 `tauri-driver`、Microsoft Edge WebDriver 和 FFmpeg 仅在 CI 运行，不随应用安装。ExifTool Windows 原始包固定版本并核对哈希，再加入 UTF-8 进程清单。准备后的运行时必须先通过中文安装目录启动检查，才能继续构建应用。补充许可证记录了对应依赖版本和上游来源，更新依赖时需要一并复核。
+测试使用的 Microsoft Edge WebDriver 和 FFmpeg 仅在 CI 运行，不随应用安装。ExifTool Windows 原始包固定版本并核对哈希，再加入 UTF-8 进程清单。准备后的运行时必须先通过中文安装目录启动检查，才能继续构建应用。补充许可证记录了对应依赖版本和上游来源，更新依赖时需要一并复核。
 
 ## 尚待验证
 

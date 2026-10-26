@@ -1,4 +1,4 @@
-"""Install and exercise the real Windows app through tauri-driver/WebView2.
+"""Install and exercise the real Windows app through Edge WebDriver/WebView2.
 
 Uses disposable synthetic media and real IPC. No app commands are mocked.
 The standard-library WebDriver client keeps test tooling out of the application.
@@ -11,6 +11,7 @@ import os
 import platform
 from pathlib import Path
 import shutil
+import socket
 import struct
 import subprocess
 import tempfile
@@ -39,6 +40,11 @@ def wait(action, timeout=60):
 
 class Driver:
     session = None
+    application = None
+
+    def __init__(self, environment, results):
+        self.environment = environment
+        self.results = results
 
     def request(self, method, path, data=None):
         body = None if data is None else json.dumps(data).encode()
@@ -57,8 +63,24 @@ class Driver:
         return self.request(method, f"/session/{self.session}" + path, data)
 
     def start(self, binary):
+        with socket.socket() as port_socket:
+            port_socket.bind(("127.0.0.1", 0))
+            port = port_socket.getsockname()[1]
+        environment = dict(self.environment,
+                           WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f"--remote-debugging-port={port} --remote-debugging-address=127.0.0.1")
+        with (self.results / "application.log").open("ab") as log:
+            self.application = subprocess.Popen([str(binary)], env=environment, stdout=log, stderr=log)
+
+        def ready():
+            if self.application.poll() is not None:
+                raise RuntimeError(f"Installed application exited with code {self.application.returncode}; see application.log")
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2) as response:
+                return json.load(response).get("webSocketDebuggerUrl")
+
+        wait(ready, timeout=30)
         value = self.request("POST", "/session", {"capabilities": {"alwaysMatch": {
-            "tauri:options": {"application": str(binary)},
+            "browserName":"webview2",
+            "ms:edgeOptions":{"debuggerAddress":f"127.0.0.1:{port}"},
         }}})
         self.session = value["sessionId"]
         self.capabilities = value.get("capabilities", {})
@@ -109,6 +131,16 @@ class Driver:
         if self.session:
             self.call("DELETE", "")
             self.session = None
+        if self.application and self.application.poll() is None:
+            subprocess.run(["powershell", "-NoProfile", "-Command",
+                            f"$null = (Get-Process -Id {self.application.pid}).CloseMainWindow()"],
+                           check=True, timeout=20)
+            try:
+                self.application.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                subprocess.run(["taskkill", "/PID", str(self.application.pid), "/T", "/F"], check=False)
+                raise AssertionError("Application did not close after idle native-window close")
+        self.application = None
 
 
 def sha(path):
@@ -225,17 +257,17 @@ def main():
     assert (install / "notices/LICENSE").is_file()
     source, source_hashes=fixture(root, exiftool)
     expected={name for name in source_hashes if "照片_0002" not in name}
-    environment=dict(os.environ, FRAMEMOOR_DATA_DIR=str(root / "state"))
-    # EdgeDriver owns its temporary WebView profile and reads DevToolsActivePort
-    # there. Overriding this folder prevents it from attaching to the app.
-    environment.pop("WEBVIEW2_USER_DATA_FOLDER", None)
+    environment=dict(os.environ, FRAMEMOOR_DATA_DIR=str(root / "state"),
+                     WEBVIEW2_USER_DATA_FOLDER=str(root / "webview"))
     environment.pop("FRAMEMOOR_EXIFTOOL",None);environment.pop("CARD_INGEST_EXIFTOOL",None)
-    driver=Driver();process=None
+    driver=Driver(environment,results);process=None
     report={"installer":args.installer.name,"installer_sha256":sha(args.installer),
             "system":platform.platform(),"architecture":platform.machine(),"checks":[],"root":str(root)}
     with (results / "driver.log").open("w",encoding="utf-8") as log:
         try:
-            process=subprocess.Popen(["tauri-driver","--native-driver",str(args.native_driver.resolve())],env=environment,stdout=log,stderr=log)
+            process=subprocess.Popen([str(args.native_driver.resolve()),"--port=4444","--verbose",
+                                      f"--log-path={results / 'edge-driver.log'}"],
+                                     env=environment,stdout=log,stderr=log)
             wait(lambda:driver.request("GET","/status"))
             driver.start(binary)
             report["webview_version"]=driver.capabilities.get("browserVersion")
