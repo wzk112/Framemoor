@@ -6,7 +6,7 @@
 
 A desktop tool for importing photos and videos from memory cards and folders. Choose files, configure destination folders and filenames, preview the result, then copy with SHA-256 verification.
 
-**Development preview (0.2).** macOS is the currently tested desktop platform. Windows support is under development; its installer and desktop workflow still need testing on Windows hardware. Real camera testing currently covers Canon EOS R5 Mark II. There is no packaged public release yet.
+**Development preview (0.2).** macOS has been tested with Canon EOS R5 Mark II media. CI builds a Windows x64 installer and tests the installed app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation. Windows CI artifacts are unsigned test builds, not a signed release.
 
 ## Features
 
@@ -49,16 +49,21 @@ npm run tauri build -- --debug --bundles app
 
 This build uses local signing and is not notarized. Development builds optimize the copy core and SHA-256 code. A signed, notarized release distribution is not yet provided.
 
-On Windows, obtain the complete Windows package from [ExifTool](https://exiftool.org/) (including `exiftool_files`), then run from `desktop`:
+On Windows x64, run from `desktop`:
 
 ```powershell
 npm ci
-python scripts/prepare-resources.py --windows-package C:\path\to\extracted-exiftool
+python scripts/prepare-resources.py
+python scripts/prepare-windows-resources.py
 python scripts/prepare-notices.py
 npm run tauri dev -- --config src-tauri/tauri.windows.conf.json
-# Experimental NSIS build; not yet validated on Windows hardware:
-npm run tauri build -- --debug --config src-tauri/tauri.windows.conf.json
+# Release-mode NSIS installer:
+npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
 ```
+
+The Windows resource script downloads the complete ExifTool 13.59 x64 package and verifies its pinned SHA-256. It includes the supporting Perl files and licenses. `prepare-notices.py` collects dependency notices for the installer. The installer is created in `desktop/src-tauri/target/release/bundle/nsis/` and installs for the current user. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.
+
+Successful [CI runs](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml) provide a **Framemoor-windows-x64** artifact containing the installer, corresponding source, notices, and SHA-256 values. Test evidence is in **windows-native-test-results**. These artifacts expire; they are not permanent release downloads. See [Windows validation](docs/windows-validation.md).
 
 Settings and task history stay in the platform application-data directory under `dev.cardingest.desktop`. For isolated development, set `FRAMEMOOR_DATA_DIR`; `FRAMEMOOR_EXIFTOOL` overrides the metadata tool path. Legacy `CARD_INGEST_*` names remain supported. The app processes media locally and does not upload media or copy logs.
 
@@ -97,7 +102,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D w
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
-[CI](https://github.com/wzk112/Framemoor/actions) checks the Rust core on macOS/Windows, the frontend and browser interactions, and the macOS desktop backend. Browser tests use mock IPC and synthetic fixtures; they do not validate actual storage or native dialogs. Camera-brand recognition is not certification of every model, card layout, or sidecar relationship. Hardware disconnects, power loss, network volumes, and full Windows desktop behavior still require further testing.
+[CI](https://github.com/wzk112/Framemoor/actions) checks the Rust core on macOS/Windows, the frontend and browser interactions, and both desktop backends. The Windows job additionally installs the packaged app, exercises its real UI and IPC, and uninstalls it. Browser tests use mock IPC and synthetic fixtures; they do not validate actual storage or native dialogs. Camera-brand recognition is not certification of every model, card layout, or sidecar relationship. Hardware disconnects, power loss, network volumes, native folder dialogs, and Windows 10/11 device coverage still require further testing.
 
 All changes go through pull requests. `main` requires successful checks, resolved conversations, and a linear history; direct pushes, force pushes, and branch deletion are blocked, including for administrators. See [CONTRIBUTING.md](CONTRIBUTING.md).
 

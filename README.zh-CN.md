@@ -6,7 +6,7 @@
 
 从存储卡或文件夹导入照片与视频的桌面工具。选择素材，设置目标目录和文件名，预览后复制，默认使用 SHA-256 校验内容。
 
-**目前为开发预览版（0.2）。** 桌面功能主要在 macOS 上测试。Windows 支持仍在开发中，安装包与完整界面流程尚待 Windows 实机验证。真实相机素材测试目前以 Canon EOS R5 Mark II 为主，暂未提供公开发行安装包。
+**目前为开发预览版（0.2）。** macOS 已使用 Canon EOS R5 Mark II 素材测试。CI 会构建 Windows x64 安装包，并使用合成素材在真实 WebView2 中测试安装后的应用。Windows 实机、读卡器及其他相机格式仍需验证。Windows CI 产物为未签名的测试构建。
 
 ## 功能
 
@@ -49,16 +49,21 @@ npm run tauri build -- --debug --bundles app
 
 该构建使用本地签名，未公证。开发构建单独优化了复制核心与 SHA-256 代码。目前尚未提供正式签名、公证的发行版。
 
-Windows 需先从 [ExifTool 官网](https://exiftool.org/) 获取完整 Windows 包（包含 `exiftool_files`），在 `desktop` 目录执行：
+Windows x64 在 `desktop` 目录执行：
 
 ```powershell
 npm ci
-python scripts/prepare-resources.py --windows-package C:\path\to\extracted-exiftool
+python scripts/prepare-resources.py
+python scripts/prepare-windows-resources.py
 python scripts/prepare-notices.py
 npm run tauri dev -- --config src-tauri/tauri.windows.conf.json
-# 实验性 NSIS 构建，尚未完成 Windows 实机验证：
-npm run tauri build -- --debug --config src-tauri/tauri.windows.conf.json
+# Release 模式 NSIS 安装包：
+npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
 ```
+
+Windows 资源脚本下载完整 ExifTool 13.59 x64 包，并核对固定的 SHA-256，保留配套 Perl 文件和许可证。`prepare-notices.py` 收集安装包需要的依赖声明。安装包生成在 `desktop/src-tauri/target/release/bundle/nsis/`，按当前用户安装。安装包未签名，Windows 可能显示未知发布者或 SmartScreen 提示。
+
+成功的 [CI 运行](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml)会提供 **Framemoor-windows-x64** 产物，包含安装包、对应源码、声明和 SHA-256；测试证据保存在 **windows-native-test-results**。CI 产物有保留期限，不是永久发行下载。详情见 [Windows 验证说明](docs/windows-validation.md)。
 
 设置和历史记录保存在系统应用数据目录的 `dev.cardingest.desktop` 下。开发时可用 `FRAMEMOOR_DATA_DIR` 指向独立目录，用 `FRAMEMOOR_EXIFTOOL` 指定元数据工具。旧的 `CARD_INGEST_*` 环境变量继续兼容。素材在本地处理，应用不会上传素材或复制日志。
 
@@ -97,7 +102,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D w
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
-[自动检查](https://github.com/wzk112/Framemoor/actions)覆盖 macOS/Windows 复制核心、前端与浏览器交互，以及 macOS 桌面后端。浏览器测试使用模拟 IPC 和示例数据，不能代替实际存储设备或原生对话框验证。识别品牌不代表已验证该品牌的所有机型、卡结构或伴随文件关系。硬件拔线、掉电、网络卷和完整 Windows 桌面行为仍需进一步测试。
+[自动检查](https://github.com/wzk112/Framemoor/actions)覆盖 macOS/Windows 复制核心、前端与浏览器交互，以及两个平台的桌面后端。Windows 任务还会安装打包后的应用，测试真实界面与 IPC，再卸载应用。浏览器测试使用模拟 IPC 和示例数据，不能代替实际存储设备或原生对话框验证。识别品牌不代表已验证该品牌的所有机型、卡结构或伴随文件关系。硬件拔线、掉电、网络卷、原生文件夹对话框及 Windows 10/11 设备覆盖仍需进一步测试。
 
 所有修改通过 PR 合并。`main` 要求自动检查通过、讨论已解决、提交历史保持线性；禁止直接推送、强推和删除分支，管理员也受限制。贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

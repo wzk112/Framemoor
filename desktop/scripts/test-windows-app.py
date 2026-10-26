@@ -8,6 +8,7 @@ import base64
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import shutil
 import struct
@@ -60,6 +61,7 @@ class Driver:
             "tauri:options": {"application": str(binary)},
         }}})
         self.session = value["sessionId"]
+        self.capabilities = value.get("capabilities", {})
         self.call("POST", "/timeouts", {"script":120000, "pageLoad":120000, "implicit":0})
 
     def js(self, script, *args):
@@ -221,12 +223,14 @@ def main():
     environment=dict(os.environ, FRAMEMOOR_DATA_DIR=str(root / "state"), WEBVIEW2_USER_DATA_FOLDER=str(root / "webview"))
     environment.pop("FRAMEMOOR_EXIFTOOL",None);environment.pop("CARD_INGEST_EXIFTOOL",None)
     driver=Driver();process=None
-    report={"installer":args.installer.name,"installer_sha256":sha(args.installer),"checks":[],"root":str(root)}
+    report={"installer":args.installer.name,"installer_sha256":sha(args.installer),
+            "system":platform.platform(),"architecture":platform.machine(),"checks":[],"root":str(root)}
     with (results / "driver.log").open("w",encoding="utf-8") as log:
         try:
             process=subprocess.Popen(["tauri-driver","--native-driver",str(args.native_driver.resolve())],env=environment,stdout=log,stderr=log)
             wait(lambda:driver.request("GET","/status"))
             driver.start(binary)
+            report["webview_version"]=driver.capabilities.get("browserVersion")
             wait(lambda:"素材来源" in driver.body())
             assert driver.invoke("bootstrap")["metadata_ready"]
             report["checks"].append("NSIS install, packaged ExifTool, real WebView2 startup")
@@ -290,7 +294,7 @@ def main():
     report["checks"].append("NSIS uninstall removes installed executable")
     report["passed"]=True
     (results / "results.json").write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding="utf-8")
-    print(json.dumps(report,indent=2,ensure_ascii=False))
+    print(json.dumps(report,indent=2))
 
 
 if __name__=="__main__":

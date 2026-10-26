@@ -1,5 +1,6 @@
 """Collect source-package licenses for the Windows application bundle."""
 import json
+import hashlib
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,6 +19,9 @@ metadata = json.loads(subprocess.check_output([
     "--filter-platform", "x86_64-pc-windows-msvc",
 ], encoding="utf-8"))
 packages = []
+fallback_root = desktop / "licenses"
+fallbacks = json.loads((fallback_root / "sources.json").read_text(encoding="utf-8"))
+shutil.copy2(fallback_root / "sources.json", target / "license-sources.json")
 for package in metadata["packages"]:
     if package.get("source") is None:
         continue
@@ -25,6 +29,14 @@ for package in metadata["packages"]:
     files = [p for p in source.iterdir() if p.is_file() and p.name.upper().startswith(("LICENSE", "LICENCE", "COPYING", "NOTICE", "COPYRIGHT"))]
     if package.get("license_file"):
         files.append(source / package["license_file"])
+    fallback = fallbacks.get(package["name"])
+    if not files and fallback:
+        if fallback["version"] != package["version"]:
+            raise SystemExit(f"Review license fallback for {package['name']} {package['version']}")
+        notice = fallback_root / fallback["file"]
+        if hashlib.sha256(notice.read_bytes()).hexdigest() != fallback["sha256"]:
+            raise SystemExit(f"License fallback hash mismatch: {notice.name}")
+        files.append(notice)
     destination = target / "rust" / (package["name"] + "-" + package["version"])
     destination.mkdir(parents=True)
     for path in set(files):
@@ -56,4 +68,4 @@ revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, encod
 print(f"Collected notices for {len(packages)} dependency packages")
 missing=[p["name"] for p in packages if not p["notices"]]
 if missing:
-    print("Packages without a top-level license file (see dependency metadata):", ", ".join(missing))
+    raise SystemExit("Missing dependency notices: " + ", ".join(missing))

@@ -98,7 +98,8 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Install Rust
         run: rustup toolchain install 1.90.0 --profile minimal --component clippy --component rustfmt
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: windows-cache
         with:
           path: |
             desktop/src-tauri/target
@@ -109,6 +110,7 @@ jobs:
       - run: python scripts/prepare-windows-resources.py
       - run: python scripts/prepare-notices.py
       - name: Build Windows NSIS installer
+        id: windows-build
         run: npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
       - name: Test native desktop backend
         run: cargo test --release --manifest-path src-tauri/Cargo.toml --locked
@@ -136,7 +138,7 @@ jobs:
         run: |
           New-Item windows-artifacts -ItemType Directory -Force | Out-Null
           Copy-Item src-tauri/target/release/bundle/nsis/*.exe windows-artifacts/
-          git archive --format=zip --output=windows-artifacts/Framemoor-source.zip HEAD
+          git -C .. archive --format=zip --output=desktop/windows-artifacts/Framemoor-source.zip HEAD
           Copy-Item src-tauri/resources/notices windows-artifacts/notices -Recurse
           Get-ChildItem windows-artifacts -File | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
@@ -148,6 +150,13 @@ jobs:
           path: desktop/native-test-results/
           if-no-files-found: warn
           retention-days: 14
+      - uses: actions/cache/save@v4
+        if: always() && steps.windows-build.outcome == 'success' && steps.windows-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            desktop/src-tauri/target
+            ~/.cargo/bin/tauri-driver.exe
+          key: ${{ steps.windows-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: Framemoor-windows-x64

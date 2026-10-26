@@ -10,7 +10,7 @@ The script copies the upstream `LICENSE`, `README`, and `lib` with the executabl
 
 ## UI and runtime dependencies
 
-The app uses React (MIT), Tauri (MIT or Apache-2.0), and Lucide (ISC, with Feather portions under MIT). Other Rust and JavaScript dependencies are identified by the lockfiles and their upstream package metadata. Retain applicable copyright and license notices when distributing their code or a compiled application. This repository currently publishes source; it does not yet provide public application binaries.
+The app uses React (MIT), Tauri (MIT or Apache-2.0), and Lucide (ISC, with Feather portions under MIT). Other Rust and JavaScript dependencies are identified by the lockfiles and their upstream package metadata. Retain applicable copyright and license notices when distributing their code or a compiled application. Windows CI artifacts include the corresponding application source and a generated `notices/` directory. `desktop/scripts/prepare-notices.py` collects notices from locked dependencies; upstream notices omitted from package archives are retained with version, source URL, and checksum in `desktop/licenses/`. The complete ExifTool Windows distribution retains its bundled Perl notices.
 
 ### Lucide
 
@@ -24,4 +24,4 @@ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH RE
 
 ## 中文说明
 
-本项目许可证适用于原创代码，依赖保留各自许可证。ExifTool 的来源、固定版本和许可证随资源脚本保留；Windows 打包需要完整官方发行包及其声明。将来分发应用二进制时，还需随包保留所有适用的第三方版权与许可声明，并提供 GPL 要求的对应源码。本仓库当前发布源码，未提供公开应用安装包。
+本项目许可证适用于原创代码，依赖保留各自许可证。ExifTool 的来源、固定版本和许可证随资源脚本保留；Windows 打包需要完整官方发行包及其声明。Windows CI 产物同时提供应用对应源码与生成的 `notices/` 目录；资源脚本从锁定依赖收集声明。部分包缺少的上游许可证保存在 `desktop/licenses/`，记录版本、来源和校验值。ExifTool Windows 完整包保留其 Perl 依赖声明。
