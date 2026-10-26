@@ -106,6 +106,8 @@ cargo test --manifest-path src-tauri/Cargo.toml --locked
 
 All changes go through pull requests. `main` requires successful checks, resolved conversations, and a linear history; direct pushes, force pushes, and branch deletion are blocked, including for administrators. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+Unicode paths, content encodings and failure-test boundaries are documented in [Encoding and failure coverage](docs/encoding-validation.md).
+
 ## License
 
 Copyright © 2026 wzk112 and contributors. Framemoor's original code is licensed under **GPL-3.0-only**; see [LICENSE](LICENSE). Commercial use and paid distribution are allowed subject to the license, including its source-distribution obligations. Dependencies retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

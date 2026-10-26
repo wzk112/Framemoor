@@ -153,7 +153,14 @@ class Driver:
             self.js("const e=arguments[0];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,arguments[1]);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));", {ELEMENT:element}, str(value))
             return
         self.call("POST", f"/element/{element}/clear", {})
-        self.call("POST", f"/element/{element}/value", {"text":str(value)})
+        # Pace actual keystrokes: WebView2 can drop repeated keys from a single
+        # zero-delay WebDriver batch. Check every prefix before using the path.
+        prefix = ""
+        for character in str(value):
+            self.call("POST", f"/element/{element}/value", {"text":character})
+            prefix += character
+            wait(lambda:self.call("GET", f"/element/{element}/property/value") == prefix, timeout=3)
+            time.sleep(.04)
 
     def select(self, element_id, value):
         self.js("const e=document.getElementById(arguments[0]);e.value=arguments[1];e.dispatchEvent(new Event('change',{bubbles:true}));", element_id, value)
@@ -203,7 +210,7 @@ def metadata(exiftool, path, date):
 
 
 def fixture(root, exiftool):
-    source = root / "中文 相机卡"
+    source = root / "中文 相机卡_日本語_한국어_العربية_Русский"
     folder = source / "DCIM/100TEST"
     first = folder / "照片_0001.PNG"
     older = folder / "照片_0002.PNG"
@@ -326,7 +333,7 @@ def main():
             unverified=run_ui(driver,source,root / "英文 未校验",False,"en",results)
             check_copy(unverified,expected,source_hashes)
             report["checks"].append("English/dark UI, disabled-verification warning, unverified copy/report")
-            exported=results / "import-report.json"
+            exported=results / "导入报告_日本語.json"
             driver.invoke("export_report",{"taskId":verified["id"],"path":str(exported)})
             assert json.loads(exported.read_text(encoding="utf-8"))["task"]["report"]["content_verified"]
             # Native preview must block existing destinations without replacing bytes.
@@ -343,6 +350,10 @@ def main():
             wait(lambda:"Media source" in driver.body())
             assert driver.js("return document.documentElement.dataset.theme")=="dark"
             assert len(driver.invoke("bootstrap")["tasks"])==2
+            saved_settings=driver.invoke("bootstrap")["settings"]
+            assert saved_settings["source"]==str(source)
+            assert saved_settings["options"]["destination"]==str(root / "英文 未校验")
+            assert driver.js("return document.getElementById('source-path').value")==str(source)
             driver.screenshot(results / "restart-english-dark.png")
             report["checks"].append("Settings and completed tasks survive application restart")
             report["native_checks_passed"]=True

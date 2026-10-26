@@ -17,6 +17,8 @@ The required CI gate includes:
 
 The test tools (Microsoft Edge WebDriver and FFmpeg) run only in CI and are not installed with the app. The original ExifTool Windows package is pinned and checksum-verified before adding the UTF-8 process manifest. The prepared runtime must start from a Chinese installation directory before the app build proceeds. Third-party license fallbacks are tied to specific package versions and upstream sources; dependency upgrades require reviewing them.
 
+Run the native test script without administrator privileges on a development PC. GitHub's hosted Windows runner is elevated, so the script temporarily sets app-specific HKLM WebView2 debug/profile overrides and restores the prior values on exit. [WebView2 ignores environment and HKCU overrides for elevated processes](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security#for-an-elevated-host-app-use-appropriate-override-flags). This CI-only configuration does not modify the installer or enable a debugging port in normal app use.
+
 ## Remaining validation
 
 This does not certify Windows 10/11 hardware, ARM64, every camera model, non-BMP filenames such as some emoji, removable-card disconnect/reconnect, ExFAT/network-volume behavior, power loss, notification delivery, native folder-selection dialogs, or SmartScreen reputation. Windows Server CI coverage must not be described as a physical Windows 10/11 test. The installer is unsigned; there is no signed production release yet.
@@ -37,6 +39,8 @@ This does not certify Windows 10/11 hardware, ARM64, every camera model, non-BMP
 `Framemoor-windows-x64` 包含安装包、对应源码、声明和 SHA-256；`windows-native-test-results` 包含截图、驱动日志及记录系统/WebView 版本的 JSON 结果。原生测试失败时不提供安装包产物。构建缓存仅保存编译结果，应用仍不使用扫描、元数据或校验缓存。
 
 测试使用的 Microsoft Edge WebDriver 和 FFmpeg 仅在 CI 运行，不随应用安装。ExifTool Windows 原始包固定版本并核对哈希，再加入 UTF-8 进程清单。准备后的运行时必须先通过中文安装目录启动检查，才能继续构建应用。补充许可证记录了对应依赖版本和上游来源，更新依赖时需要一并复核。
+
+在开发电脑上运行原生测试脚本时，请使用普通用户权限。GitHub 托管 Windows 环境以管理员运行，因此脚本会临时设置仅针对本应用的 HKLM WebView2 调试与配置目录选项，并在退出时恢复原值。[WebView2 会忽略管理员进程的环境变量和 HKCU 选项](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security#for-an-elevated-host-app-use-appropriate-override-flags)。此设置仅用于 CI，不修改安装包，也不会在正常使用时开启调试端口。
 
 ## 尚待验证
 

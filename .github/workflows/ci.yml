@@ -78,6 +78,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: python3 scripts/prepare-resources.py
+      - name: Test macOS multilingual metadata
+        run: FRAMEMOOR_TEST_EXIFTOOL="$PWD/src-tauri/resources/exiftool/exiftool" cargo test --manifest-path ../Cargo.toml --test metadata_encoding --locked -- --include-ignored --nocapture
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
@@ -113,6 +115,8 @@ jobs:
         run: |
           $env:FRAMEMOOR_TEST_EXIFTOOL = (Resolve-Path src-tauri/resources/exiftool-win/exiftool.exe).Path
           cargo test --release --manifest-path ../Cargo.toml --test windows_metadata --locked -- --include-ignored
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release --manifest-path ../Cargo.toml --test metadata_encoding --locked -- --include-ignored --nocapture
       - name: Install test drivers
         run: |
           ./scripts/prepare-windows-driver.ps1

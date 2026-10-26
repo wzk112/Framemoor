@@ -106,6 +106,8 @@ cargo test --manifest-path src-tauri/Cargo.toml --locked
 
 所有修改通过 PR 合并。`main` 要求自动检查通过、讨论已解决、提交历史保持线性；禁止直接推送、强推和删除分支，管理员也受限制。贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+Unicode 路径、文件内容编码和异常测试的边界见[编码与异常覆盖](docs/encoding-validation.md)。
+
 ## 许可证
 
 Copyright © 2026 wzk112 与贡献者。泊影原创代码采用 **GPL-3.0-only**，见 [LICENSE](LICENSE)。允许商用和收费分发，但须遵守许可证，包括相应的源码提供义务。第三方依赖沿用各自许可证，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
