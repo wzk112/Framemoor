@@ -87,7 +87,9 @@ class Driver:
         self.click(f"//button[normalize-space(.)='{text}']")
 
     def field(self, label, value):
-        element = self.element(f"//label[contains(.,'{label}')]//input")
+        element = self.element(
+            f"//label[contains(.,'{label}')]//input | //input[@id=//label[contains(.,'{label}')]/@for]"
+        )
         if self.call("GET", f"/element/{element}/attribute/type") == "date":
             self.js("const e=arguments[0];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,arguments[1]);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));", {ELEMENT:element}, str(value))
             return
