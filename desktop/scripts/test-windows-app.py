@@ -5,6 +5,7 @@ The standard-library WebDriver client keeps test tooling out of the application.
 """
 import argparse
 import base64
+import ctypes
 import hashlib
 import json
 import os
@@ -45,6 +46,41 @@ class Driver:
     def __init__(self, environment, results):
         self.environment = environment
         self.results = results
+        self.policies = []
+
+    def configure_debugging(self, binary, arguments):
+        # WebView2 150+ ignores environment/HKCU overrides for elevated hosts.
+        # Only a disposable GitHub-hosted runner may use app-specific HKLM
+        # overrides. Restore existing values on close; never change app builds.
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            return
+        if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
+            raise RuntimeError("Run native tests without elevation outside GitHub-hosted CI")
+        import winreg
+        for setting, value in [("AdditionalBrowserArguments", arguments),
+                               ("UserDataFolder", self.environment["WEBVIEW2_USER_DATA_FOLDER"])]:
+            path = rf"SOFTWARE\Policies\Microsoft\Edge\WebView2\{setting}"
+            access = winreg.KEY_READ | winreg.KEY_WRITE | winreg.KEY_WOW64_64KEY
+            with winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, path, 0, access) as key:
+                try:
+                    previous = winreg.QueryValueEx(key, binary.name)
+                except FileNotFoundError:
+                    previous = None
+                self.policies.append((path, binary.name, previous))
+                winreg.SetValueEx(key, binary.name, 0, winreg.REG_SZ, value)
+
+    def restore_debugging(self):
+        if not self.policies:
+            return
+        import winreg
+        for path, name, previous in reversed(self.policies):
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path, 0,
+                                winreg.KEY_WRITE | winreg.KEY_WOW64_64KEY) as key:
+                if previous is None:
+                    winreg.DeleteValue(key, name)
+                else:
+                    winreg.SetValueEx(key, name, 0, previous[1], previous[0])
+        self.policies.clear()
 
     def request(self, method, path, data=None):
         body = None if data is None else json.dumps(data).encode()
@@ -66,8 +102,9 @@ class Driver:
         with socket.socket() as port_socket:
             port_socket.bind(("127.0.0.1", 0))
             port = port_socket.getsockname()[1]
-        environment = dict(self.environment,
-                           WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f"--remote-debugging-port={port} --remote-debugging-address=127.0.0.1")
+        arguments = f"--remote-debugging-port={port} --remote-debugging-address=127.0.0.1"
+        self.configure_debugging(binary, arguments)
+        environment = dict(self.environment, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=arguments)
         with (self.results / "application.log").open("ab") as log:
             self.application = subprocess.Popen([str(binary)], env=environment, stdout=log, stderr=log)
 
@@ -141,6 +178,7 @@ class Driver:
                 subprocess.run(["taskkill", "/PID", str(self.application.pid), "/T", "/F"], check=False)
                 raise AssertionError("Application did not close after idle native-window close")
         self.application = None
+        self.restore_debugging()
 
 
 def sha(path):
@@ -327,6 +365,8 @@ def main():
                 driver.close()
             except Exception:
                 pass
+            finally:
+                driver.restore_debugging()
             if process:
                 subprocess.run(["taskkill","/PID",str(process.pid),"/T","/F"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     # Uninstall after closing the real app; the runner itself is disposable.

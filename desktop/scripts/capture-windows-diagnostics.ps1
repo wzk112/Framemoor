@@ -4,6 +4,9 @@ $ErrorActionPreference = 'Stop'
 Get-Process framemoor-desktop,msedgewebview2 -ErrorAction SilentlyContinue |
   Select-Object Id,ProcessName,MainWindowTitle,Responding |
   ConvertTo-Json | Set-Content (Join-Path $Results 'native-processes.json') -Encoding UTF8
+Get-CimInstance Win32_Process -Filter "Name = 'framemoor-desktop.exe' OR Name = 'msedgewebview2.exe'" |
+  Select-Object ProcessId,ParentProcessId,Name,CommandLine |
+  ConvertTo-Json | Set-Content (Join-Path $Results 'native-command-lines.json') -Encoding UTF8
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
