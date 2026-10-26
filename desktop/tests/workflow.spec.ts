@@ -1,7 +1,20 @@
 import {test,expect,type Page} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import {openSettings,switchLanguage} from './helpers';
-async function reachPreset(page:Page){await page.goto('/tests/fixture.html');await page.getByLabel('素材来源',{exact:true}).fill('/Volumes/EOS_DIGITAL');await page.getByLabel('目标文件夹',{exact:true}).fill('/test/destination');await page.getByRole('button',{name:'扫描素材'}).click();await expect(page.getByRole('heading',{name:'筛选',exact:true})).toBeVisible();await page.getByRole('button',{name:'继续',exact:true}).click();}
+async function reachPreset(page:Page,url='/tests/fixture.html'){await page.goto(url);await page.getByLabel('素材来源',{exact:true}).fill('/Volumes/EOS_DIGITAL');await page.getByLabel('目标文件夹',{exact:true}).fill('/test/destination');await page.getByRole('button',{name:'扫描素材'}).click();await expect(page.getByRole('heading',{name:'筛选',exact:true})).toBeVisible();await page.getByRole('button',{name:'继续',exact:true}).click();}
+test('successful report export retry clears the previous failure',async({page})=>{
+  await reachPreset(page,'/tests/fixture.html?report=retry');
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByLabel('已确认以上提示').check();
+  await page.getByRole('button',{name:'开始导入',exact:true}).click();
+  await page.getByRole('button',{name:'暂停',exact:true}).click();
+  await page.getByRole('button',{name:'继续导入',exact:true}).click();
+  await page.getByRole('button',{name:'导出校验报告',exact:true}).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByRole('button',{name:'导出校验报告',exact:true}).click();
+  await expect(page.getByText('校验报告已导出',{exact:true})).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
 test('multilingual paths and naming rules survive IPC and an interface language change',async({page})=>{
   const text='中文 繁體 日本語 한국어 العربية Русский café cafe\u0301 📷 𠮷';
   await page.goto('/tests/fixture.html');

@@ -11,12 +11,14 @@ Regression fixtures cover Simplified/Traditional Chinese, Japanese, Korean, Arab
 - Real filesystem copy, SHA-256, JSON plan reload and unchanged sources on macOS/Windows.
 - UTF-8, UTF-8 BOM, UTF-16 LE/BE, GB18030 and arbitrary binary payloads without conversion.
 - Native settings creation/replacement, frontend inputs/presets/preview across language changes, and Unicode Windows IPC/import/report/restart paths.
-- Real ExifTool extraction on both platforms. On Windows, supplementary-character paths must return either accurate metadata or an explicit `metadata_unavailable` warning without an invented capture date. ExifTool [documents this filename limitation](https://exiftool.org/exiftool_pod2.html#windows_unicode_file_names); passing the guarded test does not establish universal metadata support.
+- Real ExifTool extraction on both platforms: every sample, including emoji and supplementary CJK names, must return the exact camera/date/offset. ExifTool [documents broader filename limitations](https://exiftool.org/exiftool_pod2.html#WINDOWS-UNICODE-FILE-NAMES); these passing samples do not establish universal format/encoding support.
 - NFC/NFD-equivalent destinations are blocked as collisions. Invalid byte-sequence filenames are rejected by the filesystem or discovery without lossy substitution.
 
 Portable output paths intentionally reject Windows reserved names, forbidden characters, trailing dots/spaces, traversal and relative paths exceeding 230 UTF-16 units. The Windows metadata test covers source roots beyond 260 characters without relaxing output limits.
 
 ## Failure coverage and limits
+
+On 2026-10-27, a separate native debug app on macOS 27.2 (Apple silicon) completed a 3-file PNG/UTF-16 XMP import using multilingual, emoji and supplementary-CJK paths. Independent hashes matched, source bytes stayed unchanged, the native save panel exported a UTF-8 report, and English settings/history survived restart. This is a synthetic-fixture native check, not a camera/card or macOS release-installer certification.
 
 Existing tests cover changed sources, destination conflicts/publication races, corrupt partial/final data, malformed journals, injected copy failures, pause/resume, repeated execution, task locks, invalid templates/dates/timezones, unavailable metadata, future dates, disabled verification and notification permission failure. Synthetic or injected faults do not establish every real-device failure mode.
 
@@ -33,12 +35,14 @@ Remaining manual/device work includes IME composition/candidate selection, right
 - macOS/Windows 真实复制、SHA-256、JSON 计划重载和源文件内容不变。
 - UTF-8、带 BOM 的 UTF-8、UTF-16 LE/BE、GB18030 和任意二进制内容保持原样。
 - 原生设置文件创建/替换，前端输入/预设/预览切换语言后保留文字，以及 Windows 原生 IPC、导入、报告和重启中的 Unicode 路径。
-- 两个平台的真实 ExifTool 读取。Windows 扩展字符路径须准确读取，或明确返回 `metadata_unavailable` 且不虚构日期。ExifTool [说明了此类文件名的限制](https://exiftool.org/exiftool_pod2.html#windows_unicode_file_names)；保护性测试通过不等于所有元数据路径均受支持。
+- 两个平台的真实 ExifTool 读取：包括 emoji、扩展区汉字在内的每个样本，都必须准确返回相机名、日期和时区偏移。ExifTool [另有文件名限制说明](https://exiftool.org/exiftool_pod2.html#WINDOWS-UNICODE-FILE-NAMES)；这些样本通过不代表所有格式和编码均受支持。
 - NFC/NFD 两种写法的同名目标会被当作冲突；无效字节文件名由文件系统或扫描拒绝，不做有损替换。
 
 跨平台输出规则会拒绝 Windows 保留名、非法字符、末尾空格或点、路径越界，以及超过 230 个 UTF-16 单元的相对路径。Windows 元数据测试覆盖超过 260 字符的来源根目录，没有放宽输出限制。
 
 ## 异常覆盖与限制
+
+2026-10-27，在 macOS 27.2（Apple silicon）上用独立标识的原生 Debug 应用完成了 3 个 PNG/UTF-16 XMP 文件的导入，路径包含多语言、emoji 和扩展区汉字。独立哈希比对一致，来源未变；通过系统保存面板导出了 UTF-8 报告，重启后英文设置与历史仍在。这是合成素材的原生检查，不代表相机/存储卡或 macOS Release 安装包认证。
 
 已有测试覆盖来源变化、目标冲突/发布竞争、暂存或目标损坏、损坏日志、注入复制失败、暂停恢复、重复执行、任务锁、非法模板/日期/时区、元数据不可用、未来时间、关闭校验及通知权限拒绝。合成素材和注入故障不代表所有硬件异常均已实测。
 

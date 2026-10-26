@@ -11,7 +11,7 @@ const CAMERA: &str = "相机 日本語 한국어 Камера";
 
 #[test]
 #[ignore = "requires FRAMEMOOR_TEST_EXIFTOOL"]
-fn multilingual_metadata_paths_and_supplementary_character_failures_are_explicit() {
+fn multilingual_metadata_paths_preserve_capture_values() {
     let tool = PathBuf::from(
         std::env::var_os("FRAMEMOOR_TEST_EXIFTOOL").expect("Set packaged ExifTool path"),
     );
@@ -40,7 +40,7 @@ fn multilingual_metadata_paths_and_supplementary_character_failures_are_explicit
         String::from_utf8_lossy(&result.stderr)
     );
     let original = fs::read(&seed).unwrap();
-    let source = scratch.path().join("中文_日本語_한국어_العربية");
+    let source = scratch.path().join("中文_日本語_한국어_العربية_📷_𠮷");
     fs::create_dir(&source).unwrap();
     let names = [
         "简体中文",
@@ -60,31 +60,16 @@ fn multilingual_metadata_paths_and_supplementary_character_failures_are_explicit
     let catalog = workflow::scan_with_readers(&source, &tool, 4, |_, _| {}).unwrap();
     assert_eq!(catalog.file_count, names.len());
     for file in catalog.groups.iter().flat_map(|group| &group.files) {
-        // ExifTool documents a Windows limitation for surrogate-pair paths.
-        // A failed read must be visible and must never invent capture metadata.
-        let supplementary = file.path.chars().any(|c| c as u32 > 0xffff);
-        if cfg!(windows)
-            && supplementary
-            && file
+        assert_eq!(file.camera, CAMERA, "{}: {:?}", file.path, file.issues);
+        assert_eq!(file.captured.as_deref(), Some("2026:10:20 20:00:00"));
+        assert_eq!(file.offset.as_deref(), Some("+11:00"));
+        assert!(
+            !file
                 .issues
                 .iter()
                 .any(|issue| issue == "metadata_unavailable")
-        {
-            assert!(file.captured.is_none());
-            assert!(file.camera.is_empty());
-            println!("Metadata unavailable (explicit warning): {}", file.path);
-        } else {
-            assert_eq!(file.camera, CAMERA, "{}: {:?}", file.path, file.issues);
-            assert_eq!(file.captured.as_deref(), Some("2026:10:20 20:00:00"));
-            assert_eq!(file.offset.as_deref(), Some("+11:00"));
-            assert!(
-                !file
-                    .issues
-                    .iter()
-                    .any(|issue| issue == "metadata_unavailable")
-            );
-            println!("Metadata exact: {}", file.path);
-        }
+        );
+        println!("Metadata exact: {}", file.path);
         assert_eq!(fs::read(source.join(&file.path)).unwrap(), original);
     }
 }

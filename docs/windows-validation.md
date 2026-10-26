@@ -21,7 +21,7 @@ Run the native test script without administrator privileges on a development PC.
 
 ## Remaining validation
 
-This does not certify Windows 10/11 hardware, ARM64, every camera model, non-BMP filenames such as some emoji, removable-card disconnect/reconnect, ExFAT/network-volume behavior, power loss, notification delivery, native folder-selection dialogs, or SmartScreen reputation. Windows Server CI coverage must not be described as a physical Windows 10/11 test. The installer is unsigned; there is no signed production release yet.
+This does not certify Windows 10/11 hardware, ARM64, every camera model or Unicode filename combination, removable-card disconnect/reconnect, ExFAT/network-volume behavior, power loss, notification delivery, native folder-selection dialogs, or SmartScreen reputation. Unicode fixture coverage is described in [Encoding and failure coverage](encoding-validation.md). Windows Server CI coverage must not be described as a physical Windows 10/11 test. The installer is unsigned; there is no signed production release yet.
 
 ## 构建与测试范围
 
@@ -44,4 +44,4 @@ This does not certify Windows 10/11 hardware, ARM64, every camera model, non-BMP
 
 ## 尚待验证
 
-上述测试不代表已验证 Windows 10/11 实机、ARM64、所有相机机型、部分 emoji 等非 BMP 文件名、拔卡重连、ExFAT/网络卷、掉电、系统通知送达、原生文件夹选择对话框或 SmartScreen 信誉。Windows Server CI 测试不能表述为 Windows 10/11 实机测试。当前安装包未签名，尚无签名正式发行版。
+上述测试不代表已验证 Windows 10/11 实机、ARM64、所有相机机型或 Unicode 文件名组合、拔卡重连、ExFAT/网络卷、掉电、系统通知送达、原生文件夹选择对话框或 SmartScreen 信誉。Unicode 测试样本见[编码与异常覆盖](encoding-validation.md)。Windows Server CI 测试不能表述为 Windows 10/11 实机测试。当前安装包未签名，尚无签名正式发行版。
