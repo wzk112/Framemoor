@@ -107,3 +107,26 @@ mod tests {
         assert!(!assertions().contains(reason));
     }
 }
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    use windows_sys::Win32::System::Power::{
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED, SetThreadExecutionState,
+    };
+
+    #[test]
+    fn execution_state_is_held_and_released_on_the_worker_thread() {
+        // This dedicated test thread owns its execution-state flags.
+        unsafe {
+            SetThreadExecutionState(ES_CONTINUOUS);
+        }
+        {
+            let _guard = SleepGuard::acquire("Framemoor native test").unwrap();
+            let previous = unsafe { SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) };
+            assert_ne!(previous & ES_SYSTEM_REQUIRED, 0);
+        }
+        let previous = unsafe { SetThreadExecutionState(ES_CONTINUOUS) };
+        assert_eq!(previous & ES_SYSTEM_REQUIRED, 0);
+    }
+}

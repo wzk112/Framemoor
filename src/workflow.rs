@@ -414,10 +414,43 @@ fn scan_metadata(exiftool: &Path, batch: &[ScanFile], fast_cr3: bool) -> Result<
     if fast_cr3 {
         command.arg("-fast");
     }
+    #[cfg(not(windows))]
     for file in batch {
         command.arg(&file.path);
     }
+    #[cfg(not(windows))]
     let output = command.output().context("metadata_tool_failed")?;
+    #[cfg(windows)]
+    let output = {
+        use std::{io::Write, os::windows::process::CommandExt, process::Stdio};
+        // UTF-8 argument files activate ExifTool's wide-character file I/O and
+        // avoid the Windows command-line length limit for batches of long paths.
+        let mut arguments = Vec::new();
+        for file in batch {
+            let path = file.path.to_str().context("Non-Unicode source path")?;
+            ensure!(!path.contains(['\r', '\n']), "Invalid source path");
+            arguments.extend_from_slice(path.as_bytes());
+            arguments.push(b'\n');
+        }
+        command
+            .args(["-charset", "filename=UTF8", "-@", "-"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW: scanning is a background task.
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command.spawn().context("metadata_tool_failed")?;
+        let written = child
+            .stdin
+            .take()
+            .context("metadata_tool_stdin_missing")?
+            .write_all(&arguments);
+        if let Err(error) = written {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error).context("metadata_tool_input_failed");
+        }
+        child.wait_with_output().context("metadata_tool_failed")?
+    };
     let records: Vec<Value> =
         serde_json::from_slice(&output.stdout).context("metadata_tool_invalid_output")?;
     let records: HashMap<String, Value> = records

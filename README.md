@@ -54,6 +54,7 @@ On Windows, obtain the complete Windows package from [ExifTool](https://exiftool
 ```powershell
 npm ci
 python scripts/prepare-resources.py --windows-package C:\path\to\extracted-exiftool
+python scripts/prepare-notices.py
 npm run tauri dev -- --config src-tauri/tauri.windows.conf.json
 # Experimental NSIS build; not yet validated on Windows hardware:
 npm run tauri build -- --debug --config src-tauri/tauri.windows.conf.json

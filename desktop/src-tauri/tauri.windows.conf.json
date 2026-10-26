@@ -1,6 +1,21 @@
 {
   "bundle": {
-    "targets": ["nsis"],
-    "resources": { "resources/exiftool-win/": "exiftool-win/" }
+    "targets": [
+      "nsis"
+    ],
+    "resources": {
+      "resources/exiftool-win/": "exiftool-win/",
+      "resources/notices/": "notices/"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English",
+          "SimpChinese"
+        ],
+        "displayLanguageSelector": true
+      }
+    }
   }
 }

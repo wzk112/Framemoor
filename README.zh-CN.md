@@ -54,6 +54,7 @@ Windows 需先从 [ExifTool 官网](https://exiftool.org/) 获取完整 Windows 
 ```powershell
 npm ci
 python scripts/prepare-resources.py --windows-package C:\path\to\extracted-exiftool
+python scripts/prepare-notices.py
 npm run tauri dev -- --config src-tauri/tauri.windows.conf.json
 # 实验性 NSIS 构建，尚未完成 Windows 实机验证：
 npm run tauri build -- --debug --config src-tauri/tauri.windows.conf.json
