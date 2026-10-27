@@ -14,6 +14,8 @@ test('successful report export retry clears the previous failure',async({page})=
   await page.getByRole('button',{name:'导出校验报告',exact:true}).click();
   await expect(page.getByText('校验报告已导出',{exact:true})).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.getByRole('button',{name:'新建导入',exact:true}).click();
+  await expect(page.getByText('校验报告已导出',{exact:true})).toHaveCount(0);
 });
 test('multilingual paths and naming rules survive IPC and an interface language change',async({page})=>{
   const text='中文 繁體 日本語 한국어 العربية Русский café cafe\u0301 📷 𠮷';

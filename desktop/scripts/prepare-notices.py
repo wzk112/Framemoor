@@ -1,4 +1,5 @@
-"""Collect source-package licenses for the Windows application bundle."""
+"""Collect locked dependency licenses for the selected application target."""
+import argparse
 import json
 import hashlib
 import shutil
@@ -7,6 +8,14 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
 desktop = root / "desktop"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--target", help="Rust target triple; defaults to rustc's host target")
+args = parser.parse_args()
+rust_target = args.target
+if not rust_target:
+    rust_target = next(line.removeprefix("host: ") for line in subprocess.check_output(
+        ["rustc", "-vV"], encoding="utf-8"
+    ).splitlines() if line.startswith("host: "))
 target = desktop / "src-tauri/resources/notices"
 if target.exists():
     shutil.rmtree(target)
@@ -16,14 +25,15 @@ for name in ["LICENSE", "THIRD_PARTY_NOTICES.md"]:
 metadata = json.loads(subprocess.check_output([
     "cargo", "metadata", "--format-version", "1", "--locked",
     "--manifest-path", str(desktop / "src-tauri/Cargo.toml"),
-    "--filter-platform", "x86_64-pc-windows-msvc",
+    "--filter-platform", rust_target,
 ], encoding="utf-8"))
+resolved_packages = {node["id"] for node in metadata["resolve"]["nodes"]}
 packages = []
 fallback_root = desktop / "licenses"
 fallbacks = json.loads((fallback_root / "sources.json").read_text(encoding="utf-8"))
 shutil.copy2(fallback_root / "sources.json", target / "license-sources.json")
 for package in metadata["packages"]:
-    if package.get("source") is None:
+    if package.get("source") is None or package["id"] not in resolved_packages:
         continue
     source = Path(package["manifest_path"]).parent
     files = [p for p in source.iterdir() if p.is_file() and p.name.upper().startswith(("LICENSE", "LICENCE", "COPYING", "NOTICE", "COPYRIGHT"))]
@@ -60,12 +70,13 @@ for relative, package in lock["packages"].items():
 revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, encoding="utf-8").strip()
 (target / "SOURCE.txt").write_text(
     "Framemoor / 泊影 — GPL-3.0-only\nSource revision: " + revision +
+    "\nBuild target: " + rust_target +
     "\nhttps://github.com/wzk112/Framemoor/tree/" + revision +
     "\nBuild instructions and dependency lockfiles are in the source repository.\n"
     "ExifTool source: https://github.com/exiftool/exiftool/tree/2200871d9cef988051d2a99d67df3bda6cbb30a8\n",
     encoding="utf-8",
 )
-print(f"Collected notices for {len(packages)} dependency packages")
+print(f"Collected notices for {len(packages)} dependency packages ({rust_target})")
 missing=[p["name"] for p in packages if not p["notices"]]
 if missing:
     raise SystemExit("Missing dependency notices: " + ", ".join(missing))

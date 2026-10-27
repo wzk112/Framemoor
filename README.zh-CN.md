@@ -6,7 +6,16 @@
 
 从存储卡或文件夹导入照片与视频的桌面工具。选择素材，设置目标目录和文件名，预览后复制，默认使用 SHA-256 校验内容。
 
-**目前为开发预览版（0.2）。** macOS 已使用 Canon EOS R5 Mark II 素材测试。CI 会构建 Windows x64 安装包，并使用合成素材在真实 WebView2 中测试安装后的应用。Windows 实机、读卡器及其他相机格式仍需验证。Windows CI 产物为未签名的测试构建。
+**目前为开发预览版（0.2）。** macOS 已使用 Canon EOS R5 Mark II 素材测试。CI 使用合成素材在真实 WebView2 中测试安装后的 Windows x64 应用。Windows 实机、读卡器及其他相机格式仍需验证。
+
+## 下载
+
+[GitHub Releases](https://github.com/wzk112/Framemoor/releases) 提供 macOS Apple Silicon（`.dmg`）与 Windows x64（`-setup.exe`）安装包、对应源码和 SHA-256 校验值。暂不提供 Intel Mac 和 Windows ARM64 安装包。
+
+- **macOS 13+：** 打开 DMG，将应用拖入“应用程序”。应用采用 ad-hoc 签名，没有 Apple Developer ID 签名或公证，首次启动可能被 Gatekeeper 拦截。
+- **Windows 10 1903+ / Windows 11：** 运行安装程序。需要 WebView2，缺失时安装程序可联网下载。安装包未签名，可能出现未知发布者或 SmartScreen 提示。
+
+实测环境与限制见[发行打包与验证](docs/release-validation.md)。目前为预览版，请另行保留重要素材的副本。
 
 ## 功能
 
@@ -36,18 +45,20 @@ git clone https://github.com/wzk112/Framemoor.git
 cd Framemoor/desktop
 npm ci
 python3 scripts/prepare-resources.py
+python3 scripts/prepare-notices.py
 npm run tauri dev
 ```
 
 资源脚本从固定源码版本获取 **ExifTool 13.59**，并保留其许可证，不读取你的素材。也可以通过 `--source` 指定已有的对应版本源码目录。macOS 通过系统 Perl 运行随应用打包的 ExifTool。
 
-构建 macOS 开发应用：
+在 `desktop` 目录构建 macOS Release 应用与 DMG：
 
 ```sh
-npm run tauri build -- --debug --bundles app
+python3 scripts/prepare-notices.py
+npm run tauri build -- --ci --bundles app,dmg
 ```
 
-该构建使用本地签名，未公证。开发构建单独优化了复制核心与 SHA-256 代码。目前尚未提供正式签名、公证的发行版。
+产物位于 `src-tauri/target/release/bundle/`，架构与构建机器一致。`prepare-notices.py` 默认使用 Rust 宿主目标；交叉编译时传入 `--target <triple>`。应用包含 ExifTool、依赖声明和源码版本信息。开发构建使用 `--debug --bundles app`。两种构建均采用 ad-hoc 签名，未公证。
 
 Windows x64 在 `desktop` 目录执行：
 
@@ -63,7 +74,7 @@ npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
 
 Windows 资源脚本下载完整 ExifTool 13.59 x64 包，并核对固定的 SHA-256，保留配套 Perl 文件和许可证。脚本为 CC0 启动器加入 UTF-8 进程清单，使其能从中文安装目录加载依赖，不修改系统区域设置。`prepare-notices.py` 收集安装包需要的依赖声明。安装包生成在 `desktop/src-tauri/target/release/bundle/nsis/`，按当前用户安装。安装包未签名，Windows 可能显示未知发布者或 SmartScreen 提示。
 
-成功的 [CI 运行](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml)会提供 **Framemoor-windows-x64** 产物，包含安装包、对应源码、声明和 SHA-256；测试证据保存在 **windows-native-test-results**。CI 产物有保留期限，不是永久发行下载。详情见 [Windows 验证说明](docs/windows-validation.md)。
+成功的 [CI 运行](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml)会提供 **Framemoor-macos-ARM64** 和 **Framemoor-windows-x64** 产物，包含安装包、对应源码、声明和 SHA-256。Windows 测试证据保存在 **windows-native-test-results**。CI 产物有保留期限；已发布的下载保存在 GitHub Releases。详情见 [Windows 验证说明](docs/windows-validation.md)。
 
 设置和历史记录保存在系统应用数据目录的 `dev.cardingest.desktop` 下。开发时可用 `FRAMEMOOR_DATA_DIR` 指向独立目录，用 `FRAMEMOOR_EXIFTOOL` 指定元数据工具。旧的 `CARD_INGEST_*` 环境变量继续兼容。素材在本地处理，应用不会上传素材或复制日志。
 
