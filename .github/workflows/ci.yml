@@ -83,6 +83,27 @@ jobs:
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - run: python3 scripts/prepare-notices.py
+      - name: Build macOS Release app and DMG
+        run: npm run tauri build -- --ci --bundles app,dmg
+      - name: Check macOS package
+        run: |
+          codesign --verify --deep --strict src-tauri/target/release/bundle/macos/*.app
+          hdiutil verify src-tauri/target/release/bundle/dmg/*.dmg
+      - name: Prepare downloadable DMG and corresponding source
+        run: |
+          mkdir -p macos-artifacts
+          cp src-tauri/target/release/bundle/dmg/*.dmg macos-artifacts/
+          git -C .. archive --format=zip --output=desktop/macos-artifacts/Framemoor-source.zip HEAD
+          cp -R src-tauri/resources/notices macos-artifacts/notices
+          cd macos-artifacts
+          shasum -a 256 *.dmg Framemoor-source.zip > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Framemoor-macos-${{ runner.arch }}
+          path: desktop/macos-artifacts/
+          if-no-files-found: error
+          retention-days: 30
 
   windows-desktop:
     name: Desktop (Windows x64)

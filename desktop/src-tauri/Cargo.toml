@@ -23,7 +23,9 @@ uuid = { version = "1", features = ["v4"] }
 
 [profile.release]
 lto = "thin"
-strip = "debuginfo"
+# Rust 1.90's strip can misalign Mach-O LINKEDIT on macOS 27 (rust#157750).
+# Keep Release optimization/LTO while allowing proc-macros and the app to load.
+strip = "none"
 
 # Keep the development preview responsive while retaining the debug build path.
 [profile.dev.package.framemoor-core]

@@ -6,7 +6,16 @@
 
 A desktop tool for importing photos and videos from memory cards and folders. Choose files, configure destination folders and filenames, preview the result, then copy with SHA-256 verification.
 
-**Development preview (0.2).** macOS has been tested with Canon EOS R5 Mark II media. CI builds a Windows x64 installer and tests the installed app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation. Windows CI artifacts are unsigned test builds, not a signed release.
+**Development preview (0.2).** macOS has been tested with Canon EOS R5 Mark II media. CI tests the installed Windows x64 app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation.
+
+## Download
+
+[GitHub Releases](https://github.com/wzk112/Framemoor/releases) provide macOS Apple Silicon (`.dmg`) and Windows x64 (`-setup.exe`) packages, corresponding source, and SHA-256 checksums. Intel Mac and Windows ARM64 installers are not provided.
+
+- **macOS 13+:** open the DMG and drag the app to Applications. The app is ad-hoc signed, without Apple Developer ID signing or notarization; Gatekeeper may block the first launch.
+- **Windows 10 1903+ / Windows 11:** run the installer. WebView2 is required; the installer can download it when missing. The installer is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.
+
+See [release packaging and validation](docs/release-validation.md) for the tested environments and limitations. These are preview releases; keep another copy of important source media.
 
 ## Features
 
@@ -36,18 +45,20 @@ git clone https://github.com/wzk112/Framemoor.git
 cd Framemoor/desktop
 npm ci
 python3 scripts/prepare-resources.py
+python3 scripts/prepare-notices.py
 npm run tauri dev
 ```
 
 The resource script retrieves **ExifTool 13.59** at a fixed source revision and retains its license files. It does not read your media. Use `--source` to provide an existing checkout at the required revision. macOS uses system Perl to run the bundled ExifTool script.
 
-Build a macOS development app:
+Build a macOS Release app and DMG from `desktop`:
 
 ```sh
-npm run tauri build -- --debug --bundles app
+python3 scripts/prepare-notices.py
+npm run tauri build -- --ci --bundles app,dmg
 ```
 
-This build uses local signing and is not notarized. Development builds optimize the copy core and SHA-256 code. A signed, notarized release distribution is not yet provided.
+Packages are created in `src-tauri/target/release/bundle/`, for the build machine's architecture. `prepare-notices.py` defaults to the Rust host target; pass `--target <triple>` when cross-compiling. The app includes ExifTool, dependency notices and source revision information. For a development app, use `--debug --bundles app`. Both builds use ad-hoc signing and are not notarized.
 
 On Windows x64, run from `desktop`:
 
@@ -63,7 +74,7 @@ npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
 
 The Windows resource script downloads the complete ExifTool 13.59 x64 package and verifies its pinned SHA-256. It includes the supporting Perl files and licenses. It adds a UTF-8 process manifest to the CC0 launcher so it can load its runtime from Chinese installation paths; the system locale is not changed. `prepare-notices.py` collects dependency notices for the installer. The installer is created in `desktop/src-tauri/target/release/bundle/nsis/` and installs for the current user. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.
 
-Successful [CI runs](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml) provide a **Framemoor-windows-x64** artifact containing the installer, corresponding source, notices, and SHA-256 values. Test evidence is in **windows-native-test-results**. These artifacts expire; they are not permanent release downloads. See [Windows validation](docs/windows-validation.md).
+Successful [CI runs](https://github.com/wzk112/Framemoor/actions/workflows/ci.yml) provide **Framemoor-macos-ARM64** and **Framemoor-windows-x64** artifacts containing the installer, corresponding source, notices, and SHA-256 values. Windows test evidence is in **windows-native-test-results**. CI artifacts expire; published downloads are kept on GitHub Releases. See [Windows validation](docs/windows-validation.md).
 
 Settings and task history stay in the platform application-data directory under `dev.cardingest.desktop`. For isolated development, set `FRAMEMOOR_DATA_DIR`; `FRAMEMOOR_EXIFTOOL` overrides the metadata tool path. Legacy `CARD_INGEST_*` names remain supported. The app processes media locally and does not upload media or copy logs.
 

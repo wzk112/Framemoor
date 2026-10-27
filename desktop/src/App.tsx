@@ -112,7 +112,7 @@ export default function App(){
   async function resume(){if(!task||locked)return;setBusy('starting');setPausing(false);setError('');try{await invoke('save_settings',{settings:{...settings,source,options}});refreshTask(await invoke<Task>('resume_task',{taskId:task.id}));}catch(e){fail(e);}finally{setBusy('');}}
   async function pause(){setPausing(true);try{await invoke('pause_import');}catch(e){setPausing(false);fail(e);}}
   async function exportReport(){if(!task)return;try{const path=await save({defaultPath:`framemoor-${task.id.slice(0,8)}.json`,filters:[{name:'JSON',extensions:['json']}]});if(path){setError('');setNotice(null);await invoke('export_report',{taskId:task.id,path});setNotice(task.verification?.enabled===false?'importReportSaved':'reportSaved');}}catch(e){fail(e);}}
-  function newImport(){setOptions(applyImportDefaults(settings,{...options,content:''}));setTask(null);setPreview(null);setInventory(null);setCatalog(null);setStep(0);setAck(false);setPausing(false);setError('');}
+  function newImport(){setOptions(applyImportDefaults(settings,{...options,content:''}));setTask(null);setPreview(null);setInventory(null);setCatalog(null);setStep(0);setAck(false);setPausing(false);setError('');setNotice(null);}
   function savePreset(name:string){setSettings(s=>({...s,presets:[{name,rules:structuredClone(normalizeOptions(options).rules!)},...s.presets.filter(p=>p.name!==name)].slice(0,30)}));setNotice('settingsSaved');}
   useEffect(()=>{
     if(!catalog)return;

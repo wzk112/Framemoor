@@ -20,6 +20,8 @@ Portable output paths intentionally reject Windows reserved names, forbidden cha
 
 On 2026-10-27, a separate native debug app on macOS 27.2 (Apple silicon) completed a 3-file PNG/UTF-16 XMP import using multilingual, emoji and supplementary-CJK paths. Independent hashes matched, source bytes stayed unchanged, the native save panel exported a UTF-8 report, and English settings/history survived restart. This is a synthetic-fixture native check, not a camera/card or macOS release-installer certification.
 
+A later DMG-installed Release build completed a 4-file check including H.264 video, both verification modes and restart persistence; see [Release validation](release-validation.md). That adds packaged native coverage without extending the hardware claims.
+
 Existing tests cover changed sources, destination conflicts/publication races, corrupt partial/final data, malformed journals, injected copy failures, pause/resume, repeated execution, task locks, invalid templates/dates/timezones, unavailable metadata, future dates, disabled verification and notification permission failure. Synthetic or injected faults do not establish every real-device failure mode.
 
 Remaining manual/device work includes IME composition/candidate selection, right-to-left visual order, Windows 10/11 standard-user permissions/ACL failures, disk exhaustion, ExFAT/SMB volumes, removal/reconnection, actual power loss, antivirus/file-lock interference and notifications. No test suite guarantees every application state; reports must identify the OS and distinguish backend, browser, native and hardware checks.
@@ -43,6 +45,8 @@ Remaining manual/device work includes IME composition/candidate selection, right
 ## 异常覆盖与限制
 
 2026-10-27，在 macOS 27.2（Apple silicon）上用独立标识的原生 Debug 应用完成了 3 个 PNG/UTF-16 XMP 文件的导入，路径包含多语言、emoji 和扩展区汉字。独立哈希比对一致，来源未变；通过系统保存面板导出了 UTF-8 报告，重启后英文设置与历史仍在。这是合成素材的原生检查，不代表相机/存储卡或 macOS Release 安装包认证。
+
+随后从 DMG 安装的 Release 构建完成了含 H.264 视频的四文件测试、两种校验模式及重启持久化，见[Release 验证](release-validation.md)。这补充了安装包的原生验证，没有扩大硬件支持结论。
 
 已有测试覆盖来源变化、目标冲突/发布竞争、暂存或目标损坏、损坏日志、注入复制失败、暂停恢复、重复执行、任务锁、非法模板/日期/时区、元数据不可用、未来时间、关闭校验及通知权限拒绝。合成素材和注入故障不代表所有硬件异常均已实测。
 
