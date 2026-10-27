@@ -78,12 +78,12 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: python3 scripts/prepare-resources.py
+      - run: python3 scripts/prepare-notices.py
       - name: Test macOS multilingual metadata
         run: FRAMEMOOR_TEST_EXIFTOOL="$PWD/src-tauri/resources/exiftool/exiftool" cargo test --manifest-path ../Cargo.toml --test metadata_encoding --locked -- --include-ignored --nocapture
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
-      - run: python3 scripts/prepare-notices.py
       - name: Build macOS Release app and DMG
         run: npm run tauri build -- --ci --bundles app,dmg
       - name: Check macOS package
