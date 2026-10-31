@@ -51,10 +51,55 @@ struct Shared {
     exiftool: PathBuf,
     busy: AtomicBool,
     pause: AtomicBool,
+    scan: Mutex<ScanSession>,
     catalogs: Mutex<HashMap<String, Catalog>>,
     previews: Mutex<HashMap<String, Preview>>,
     tasks: Mutex<HashMap<String, Task>>,
     settings: Mutex<Value>,
+}
+#[derive(Clone, Serialize)]
+struct ScanInventoryEvent<'a> {
+    scan_id: &'a str,
+    #[serde(flatten)]
+    inventory: &'a workflow::ScanInventory,
+}
+#[derive(Default)]
+struct ScanSession {
+    active: Option<(String, Arc<AtomicBool>)>,
+    // Keep one pending request to cover cancel arriving before scan_source is
+    // scheduled. IDs are generated afresh for each UI request, never reused.
+    pending_cancel: Option<String>,
+}
+impl ScanSession {
+    fn begin(&mut self, id: String) -> Arc<AtomicBool> {
+        let cancelled = self.pending_cancel.as_deref() == Some(&id);
+        if cancelled {
+            self.pending_cancel = None;
+        }
+        let flag = Arc::new(AtomicBool::new(cancelled));
+        self.active = Some((id, flag.clone()));
+        flag
+    }
+    fn cancel(&mut self, id: &str) {
+        if let Some((active, flag)) = &self.active
+            && active == id
+        {
+            flag.store(true, Ordering::SeqCst);
+        } else {
+            self.pending_cancel = Some(id.to_owned());
+        }
+    }
+    fn finish(&mut self, id: &str) -> bool {
+        if self.active.as_ref().is_some_and(|(active, _)| active == id) {
+            return self.active.take().unwrap().1.load(Ordering::SeqCst);
+        }
+        false
+    }
+    fn cancel_active(&self) {
+        if let Some((_, flag)) = &self.active {
+            flag.store(true, Ordering::SeqCst);
+        }
+    }
 }
 type State = Arc<Shared>;
 fn chrome_color(theme: &tauri::Theme) -> tauri::window::Color {
@@ -93,6 +138,83 @@ mod encoding_tests {
                 assert!(std::str::from_utf8(&bytes)?.contains("中文"));
                 assert_eq!(serde_json::from_slice::<Value>(&bytes)?, expected);
                 assert!(!path.with_extension("tmp").exists());
+            }
+            Ok(())
+        })();
+        let _ = fs::remove_dir_all(&scratch);
+        result
+    }
+}
+
+#[cfg(test)]
+mod desktop_action_tests {
+    use super::*;
+
+    #[test]
+    fn windows_shell_paths_preserve_unicode_and_unc_names() -> Result<()> {
+        assert_eq!(
+            windows_destination_argument(Path::new(r"\\?\C:\目标 中文📷"))?,
+            r"C:\目标 中文📷"
+        );
+        assert_eq!(
+            windows_destination_argument(Path::new(r"\\?\UNC\server\share\中文"))?,
+            r"\\server\share\中文"
+        );
+        assert_eq!(
+            windows_destination_argument(Path::new(r"C:\Camera"))?,
+            r"C:\Camera"
+        );
+        assert!(windows_destination_argument(Path::new(r"\\?\Volume{unknown}\Camera")).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn cancellation_is_scoped_and_handles_requests_before_registration() {
+        let mut scans = ScanSession::default();
+        scans.cancel("early");
+        let early = scans.begin("early".into());
+        assert!(early.load(Ordering::SeqCst));
+        assert!(scans.finish("early"));
+
+        let next = scans.begin("next".into());
+        scans.cancel("early");
+        assert!(!next.load(Ordering::SeqCst));
+        scans.cancel("next");
+        assert!(next.load(Ordering::SeqCst));
+        assert!(scans.finish("next"));
+
+        let fresh = scans.begin("fresh".into());
+        assert!(!fresh.load(Ordering::SeqCst));
+        assert!(!scans.finish("fresh"));
+        assert!(scans.active.is_none());
+    }
+
+    #[test]
+    fn opening_destination_requires_complete_task_and_original_identity() -> Result<()> {
+        let scratch = std::env::temp_dir().join(format!("framemoor-open-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(scratch.join("目标 中文📷"))?;
+        fs::create_dir_all(scratch.join("other"))?;
+        let result = (|| -> Result<()> {
+            let destination = fs::canonicalize(scratch.join("目标 中文📷"))?;
+            let identity = core::platform::root_identity(&destination)?;
+            assert_eq!(
+                checked_destination("complete", &destination, &identity)?,
+                destination
+            );
+            assert!(checked_destination("running", &destination, &identity).is_err());
+            assert!(checked_destination("paused", &destination, &identity).is_err());
+            let other = fs::canonicalize(scratch.join("other"))?;
+            assert!(checked_destination("complete", &other, &identity).is_err());
+            fs::remove_dir(&destination)?;
+            assert!(checked_destination("complete", &destination, &identity).is_err());
+            assert!(
+                !destination.exists(),
+                "Opening a missing destination must not recreate it"
+            );
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(&other, &destination)?;
+                assert!(checked_destination("complete", &destination, &identity).is_err());
             }
             Ok(())
         })();
@@ -160,6 +282,10 @@ fn bootstrap(state: tauri::State<State>) -> Value {
                 .ok(),
         )
     });
+    let locations = available_locations();
+    json!({"settings":state.settings.lock().unwrap().clone(),"tasks":tasks,"locations":locations,"metadata_ready":state.exiftool.is_file(),"version":env!("CARGO_PKG_VERSION")})
+}
+fn available_locations() -> Vec<String> {
     let mut locations = Vec::new();
     #[cfg(target_os = "macos")]
     if let Ok(items) = fs::read_dir("/Volumes") {
@@ -179,7 +305,15 @@ fn bootstrap(state: tauri::State<State>) -> Value {
             locations.push(drive);
         }
     }
-    json!({"settings":state.settings.lock().unwrap().clone(),"tasks":tasks,"locations":locations,"metadata_ready":state.exiftool.is_file(),"version":env!("CARGO_PKG_VERSION")})
+    locations.sort();
+    locations.dedup();
+    locations
+}
+#[tauri::command]
+async fn refresh_locations() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(available_locations)
+        .await
+        .map_err(failure)
 }
 #[tauri::command]
 async fn verification_recommendation(
@@ -227,36 +361,73 @@ async fn scan_source(
     app: tauri::AppHandle,
     state: tauri::State<'_, State>,
     source: String,
+    scan_id: Option<String>,
 ) -> Result<Catalog, String> {
+    let scan_id = scan_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    uuid::Uuid::parse_str(&scan_id).map_err(|_| "invalid_scan_id")?;
     let state = state.inner().clone();
     if state.busy.swap(true, Ordering::SeqCst) {
         return Err("busy".into());
     }
+    let cancelled = state.scan.lock().unwrap().begin(scan_id.clone());
     // A failed new scan must not leave a previous catalog or preview usable.
     state.catalogs.lock().unwrap().clear();
     state.previews.lock().unwrap().clear();
     let worker = state.clone();
+    let event_scan_id = scan_id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        workflow::scan_observed(
+        workflow::scan_cancellable(
             Path::new(&source),
             &worker.exiftool,
             workflow::default_scan_readers(),
+            &cancelled,
             |inventory| {
-                let _ = app.emit("scan-inventory", inventory);
+                if !cancelled.load(Ordering::SeqCst) {
+                    let _ = app.emit(
+                        "scan-inventory",
+                        ScanInventoryEvent {
+                            scan_id: &event_scan_id,
+                            inventory,
+                        },
+                    );
+                }
             },
             |done, total| {
-                let _ = app.emit("scan-progress", json!({"done":done,"total":total}));
+                if !cancelled.load(Ordering::SeqCst) {
+                    let _ = app.emit(
+                        "scan-progress",
+                        json!({"scan_id":event_scan_id,"done":done,"total":total}),
+                    );
+                }
             },
         )
     })
     .await;
+    // Finalization and cancellation are ordered by this lock. Never register a
+    // partial/cancelled catalog or release busy before worker cleanup finishes.
+    let mut session = state.scan.lock().unwrap();
+    let result = if session.finish(&scan_id) {
+        Err("scan_cancelled".into())
+    } else {
+        result
+            .map_err(failure)
+            .and_then(|result| result.map_err(failure))
+    };
+    if let Ok(catalog) = &result {
+        state
+            .catalogs
+            .lock()
+            .unwrap()
+            .insert(catalog.id.clone(), catalog.clone());
+    }
     state.busy.store(false, Ordering::SeqCst);
-    let catalog = result.map_err(failure)?.map_err(failure)?;
-    let mut catalogs = state.catalogs.lock().unwrap();
-    catalogs.clear();
-    catalogs.insert(catalog.id.clone(), catalog.clone());
-    state.previews.lock().unwrap().clear();
-    Ok(catalog)
+    result
+}
+#[tauri::command]
+fn cancel_scan(state: tauri::State<State>, scan_id: String) -> Result<(), String> {
+    uuid::Uuid::parse_str(&scan_id).map_err(|_| "invalid_scan_id")?;
+    state.scan.lock().unwrap().cancel(&scan_id);
+    Ok(())
 }
 async fn compute_preview(
     state: &State,
@@ -600,6 +771,87 @@ fn get_task(state: tauri::State<State>, task_id: String) -> Result<Task, String>
         .cloned()
         .ok_or("task_missing".into())
 }
+fn checked_destination(
+    status: &str,
+    destination: &Path,
+    identity: &core::platform::RootIdentity,
+) -> Result<PathBuf> {
+    ensure!(status == "complete", "task_not_complete");
+    core::platform::reject_link(destination).context("destination_unavailable")?;
+    let canonical = fs::canonicalize(destination).context("destination_unavailable")?;
+    ensure!(
+        canonical == destination && canonical.is_dir(),
+        "destination_changed"
+    );
+    ensure!(
+        core::platform::root_identity(&canonical)? == *identity,
+        "destination_changed"
+    );
+    Ok(canonical)
+}
+#[cfg(any(windows, test))]
+fn windows_destination_argument(destination: &Path) -> Result<String> {
+    let value = destination.to_str().context("open_destination_failed")?;
+    // Rust's canonical paths use the Win32 extended prefix; Explorer expects
+    // the normal drive/UNC spelling. Identity was checked before this conversion.
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        return Ok(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = value.strip_prefix(r"\\?\") {
+        ensure!(
+            rest.as_bytes().get(1) == Some(&b':'),
+            "open_destination_failed"
+        );
+        return Ok(rest.to_owned());
+    }
+    Ok(value.to_owned())
+}
+#[tauri::command]
+async fn open_task_destination(
+    state: tauri::State<'_, State>,
+    task_id: String,
+) -> Result<(), String> {
+    let task = state
+        .tasks
+        .lock()
+        .unwrap()
+        .get(&task_id)
+        .cloned()
+        .ok_or("task_missing")?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<()> {
+        let destination = checked_destination(
+            &task.status,
+            &task.preview.destination,
+            &task.preview.destination_identity,
+        )?;
+        #[cfg(target_os = "macos")]
+        {
+            let status = std::process::Command::new("/usr/bin/open")
+                .arg(&destination)
+                .status()
+                .context("open_destination_failed")?;
+            ensure!(status.success(), "open_destination_failed");
+        }
+        #[cfg(target_os = "windows")]
+        {
+            // Explorer may hand the request to an existing process and return
+            // a nonzero status. Successful spawn is the supported handoff.
+            let system_root = std::env::var_os("SystemRoot").context("open_destination_failed")?;
+            let mut child =
+                std::process::Command::new(PathBuf::from(system_root).join("explorer.exe"))
+                    .arg(windows_destination_argument(&destination)?)
+                    .spawn()
+                    .context("open_destination_failed")?;
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+        Ok(())
+    })
+    .await
+    .map_err(failure)?
+    .map_err(failure)
+}
 #[tauri::command]
 fn export_report(state: tauri::State<State>, task_id: String, path: String) -> Result<(), String> {
     let result = (|| -> Result<()> {
@@ -693,6 +945,7 @@ fn main() {
                 exiftool,
                 busy: AtomicBool::new(false),
                 pause: AtomicBool::new(false),
+                scan: Mutex::new(ScanSession::default()),
                 catalogs: Mutex::new(HashMap::new()),
                 previews: Mutex::new(HashMap::new()),
                 tasks: Mutex::new(tasks),
@@ -702,9 +955,11 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             bootstrap,
+            refresh_locations,
             verification_recommendation,
             save_settings,
             scan_source,
+            cancel_scan,
             build_preview,
             preview_layout,
             selection_summary,
@@ -712,6 +967,7 @@ fn main() {
             pause_import,
             resume_task,
             get_task,
+            open_task_destination,
             export_report,
             test_notification
         ])
@@ -724,6 +980,7 @@ fn main() {
                 if state.busy.load(Ordering::SeqCst) {
                     api.prevent_close();
                     state.pause.store(true, Ordering::SeqCst);
+                    state.scan.lock().unwrap().cancel_active();
                     let _ = window.emit("close-deferred", ());
                 }
             }
@@ -736,6 +993,7 @@ fn main() {
             if state.busy.load(Ordering::SeqCst) {
                 api.prevent_exit();
                 state.pause.store(true, Ordering::SeqCst);
+                state.scan.lock().unwrap().cancel_active();
                 let _ = app.emit("close-deferred", ());
             }
         }

@@ -1,15 +1,18 @@
 //! Media discovery and a frozen, reviewable import recipe. No source writes.
 use crate::{CopySpec, paths, platform};
+mod metadata_process;
 use anyhow::{Context, Result, bail, ensure};
 use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::Tz;
+use metadata_process::MetadataProcess;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs,
+    io::{Read, Write},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output, Stdio},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc,
@@ -381,7 +384,98 @@ struct ScanFile {
     modified_ns: u64,
 }
 
-fn scan_metadata(exiftool: &Path, batch: &[ScanFile], fast_cr3: bool) -> Result<Vec<MediaFile>> {
+fn check_scan(cancelled: &AtomicBool) -> Result<()> {
+    ensure!(!cancelled.load(Ordering::SeqCst), "scan_cancelled");
+    Ok(())
+}
+
+fn metadata_output(
+    command: &mut Command,
+    input: Option<Vec<u8>>,
+    cancelled: &AtomicBool,
+) -> Result<Output> {
+    check_scan(cancelled)?;
+    command
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut process = MetadataProcess::spawn(command)?;
+    let stdout = process.child.stdout.take().expect("piped metadata stdout");
+    let stderr = process.child.stderr.take().expect("piped metadata stderr");
+    let stdin = process.child.stdin.take();
+    // Drain both pipes while waiting. Large metadata batches must not deadlock
+    // behind a full pipe, including while a cancellation is in flight.
+    thread::scope(|scope| {
+        let read = |mut pipe: Box<dyn Read + Send>| {
+            let mut bytes = Vec::new();
+            pipe.read_to_end(&mut bytes).map(|_| bytes)
+        };
+        let out = scope.spawn(move || read(Box::new(stdout)));
+        let err = scope.spawn(move || read(Box::new(stderr)));
+        let write = scope.spawn(move || -> std::io::Result<()> {
+            if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                stdin.write_all(&input)?;
+            }
+            Ok(())
+        });
+        let mut exit_status = None;
+        let status = loop {
+            if let Err(error) = check_scan(cancelled) {
+                process.stop();
+                break Err(error);
+            }
+            if exit_status.is_none() {
+                match process.child.try_wait() {
+                    Ok(status) => exit_status = status,
+                    Err(error) => {
+                        process.stop();
+                        break Err(error).context("metadata_tool_failed");
+                    }
+                }
+            }
+            // A launcher may exit before its helper closes inherited pipes.
+            // Keep observing cancellation until every I/O helper has finished.
+            if out.is_finished()
+                && err.is_finished()
+                && write.is_finished()
+                && let Some(status) = exit_status
+            {
+                break Ok(status);
+            }
+            thread::sleep(std::time::Duration::from_millis(20));
+        };
+        // Scope joins all helpers before returning, even on cancellation/error.
+        let stdout = out
+            .join()
+            .map_err(|_| anyhow::anyhow!("metadata_reader_failed"))?;
+        let stderr = err
+            .join()
+            .map_err(|_| anyhow::anyhow!("metadata_reader_failed"))?;
+        let input = write
+            .join()
+            .map_err(|_| anyhow::anyhow!("metadata_writer_failed"))?;
+        let status = status?;
+        check_scan(cancelled)?;
+        input.context("metadata_tool_input_failed")?;
+        Ok(Output {
+            status,
+            stdout: stdout.context("metadata_tool_failed")?,
+            stderr: stderr.context("metadata_tool_failed")?,
+        })
+    })
+}
+
+fn scan_metadata(
+    exiftool: &Path,
+    batch: &[ScanFile],
+    fast_cr3: bool,
+    cancelled: &AtomicBool,
+) -> Result<Vec<MediaFile>> {
+    check_scan(cancelled)?;
     let mut command = if exiftool.extension().is_some_and(|x| x == "exe") {
         Command::new(exiftool)
     } else {
@@ -419,10 +513,10 @@ fn scan_metadata(exiftool: &Path, batch: &[ScanFile], fast_cr3: bool) -> Result<
         command.arg(&file.path);
     }
     #[cfg(not(windows))]
-    let output = command.output().context("metadata_tool_failed")?;
+    let output = metadata_output(&mut command, None, cancelled)?;
     #[cfg(windows)]
     let output = {
-        use std::{io::Write, os::windows::process::CommandExt, process::Stdio};
+        use std::os::windows::process::CommandExt;
         // UTF-8 argument files activate ExifTool's wide-character file I/O and
         // avoid the Windows command-line length limit for batches of long paths.
         let mut arguments = Vec::new();
@@ -434,23 +528,10 @@ fn scan_metadata(exiftool: &Path, batch: &[ScanFile], fast_cr3: bool) -> Result<
         }
         command
             .args(["-charset", "filename=UTF8", "-@", "-"])
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW: scanning is a background task.
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let mut child = command.spawn().context("metadata_tool_failed")?;
-        let written = child
-            .stdin
-            .take()
-            .context("metadata_tool_stdin_missing")?
-            .write_all(&arguments);
-        if let Err(error) = written {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(error).context("metadata_tool_input_failed");
-        }
-        child.wait_with_output().context("metadata_tool_failed")?
+            .creation_flags(0x08000000); // CREATE_NO_WINDOW: scanning is a background task.
+        metadata_output(&mut command, Some(arguments), cancelled)?
     };
+    check_scan(cancelled)?;
     let records: Vec<Value> =
         serde_json::from_slice(&output.stdout).context("metadata_tool_invalid_output")?;
     let records: HashMap<String, Value> = records
@@ -463,6 +544,7 @@ fn scan_metadata(exiftool: &Path, batch: &[ScanFile], fast_cr3: bool) -> Result<
         .collect();
     let mut files = Vec::with_capacity(batch.len());
     for file in batch {
+        check_scan(cancelled)?;
         let record = records.get(&file.path.to_string_lossy().replace('\\', "/"));
         files.push(describe(
             file.source.clone(),
@@ -487,10 +569,11 @@ fn scan_metadata(exiftool: &Path, batch: &[ScanFile], fast_cr3: bool) -> Result<
             .map(|(_, input)| input.clone())
             .collect();
         if !incomplete.is_empty() {
-            let replacements: HashMap<_, _> = scan_metadata(exiftool, &incomplete, false)?
-                .into_iter()
-                .map(|f| (f.path.clone(), f))
-                .collect();
+            let replacements: HashMap<_, _> =
+                scan_metadata(exiftool, &incomplete, false, cancelled)?
+                    .into_iter()
+                    .map(|f| (f.path.clone(), f))
+                    .collect();
             for file in &mut files {
                 if let Some(replacement) = replacements.get(&file.path) {
                     *file = replacement.clone();
@@ -521,8 +604,29 @@ pub fn scan_observed(
     exiftool: &Path,
     readers: usize,
     inventory: impl FnOnce(&ScanInventory),
+    progress: impl FnMut(usize, usize),
+) -> Result<Catalog> {
+    scan_cancellable(
+        root,
+        exiftool,
+        readers,
+        &AtomicBool::new(false),
+        inventory,
+        progress,
+    )
+}
+
+/// Cancellation discards the entire catalog and waits for metadata processes
+/// and reader threads to stop. It never returns a partial, usable inventory.
+pub fn scan_cancellable(
+    root: &Path,
+    exiftool: &Path,
+    readers: usize,
+    cancelled: &AtomicBool,
+    inventory: impl FnOnce(&ScanInventory),
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Catalog> {
+    check_scan(cancelled)?;
     ensure!(
         (1..=MAX_SCAN_READERS).contains(&readers),
         "invalid_scan_readers"
@@ -530,13 +634,14 @@ pub fn scan_observed(
     let root = fs::canonicalize(root)?;
     let identity = platform::root_identity(&root)?;
     let mount = platform::mount_token(&root)?;
-    let specs = crate::discover(&root)?;
+    let specs = crate::discover_checked(&root, || check_scan(cancelled))?;
     ensure!(!specs.is_empty(), "empty_source");
     ensure!(exiftool.is_file(), "metadata_tool_missing");
     progress(0, specs.len());
     let mut cr3 = Vec::new();
     let mut other = Vec::new();
     for spec in &specs {
+        check_scan(cancelled)?;
         let path = paths::join(&root, &spec.source)?;
         let m = fs::metadata(&path)?;
         let file = ScanFile {
@@ -570,6 +675,7 @@ pub fn scan_observed(
         other_groups: provisional.iter().filter(|g| g.kind == "other").count(),
     });
     drop(provisional);
+    check_scan(cancelled)?;
     // Full video/unknown reads can take longer than CR3 header reads. Smaller
     // batches scheduled first avoid leaving all videos on one final reader.
     let jobs: Vec<_> = other
@@ -585,11 +691,11 @@ pub fn scan_observed(
             let sender = sender.clone();
             let (jobs, next, stop) = (&jobs, &next, &stop);
             scope.spawn(move || {
-                while !stop.load(Ordering::Relaxed) {
+                while !stop.load(Ordering::Relaxed) && !cancelled.load(Ordering::SeqCst) {
                     let Some((fast, batch)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) else {
                         break;
                     };
-                    let result = scan_metadata(exiftool, batch, *fast);
+                    let result = scan_metadata(exiftool, batch, *fast, cancelled);
                     if result.is_err() {
                         stop.store(true, Ordering::Relaxed);
                     }
@@ -602,9 +708,11 @@ pub fn scan_observed(
         drop(sender);
         let mut files = Vec::with_capacity(specs.len());
         for result in receiver {
+            check_scan(cancelled)?;
             files.extend(result?);
             progress(files.len(), specs.len());
         }
+        check_scan(cancelled)?;
         ensure!(files.len() == specs.len(), "metadata_tool_failed");
         Ok(files)
     })?;
@@ -614,7 +722,8 @@ pub fn scan_observed(
         platform::mount_token(&root)? == mount && platform::root_identity(&root)? == identity,
         "source_changed"
     );
-    let current = crate::discover(&root)?;
+    check_scan(cancelled)?;
+    let current = crate::discover_checked(&root, || check_scan(cancelled))?;
     ensure!(
         current.len() == specs.len()
             && current
@@ -624,6 +733,7 @@ pub fn scan_observed(
         "source_changed"
     );
     for file in &files {
+        check_scan(cancelled)?;
         let m = fs::metadata(paths::join(&root, &file.path)?)?;
         ensure!(
             m.len() == file.bytes
@@ -633,6 +743,7 @@ pub fn scan_observed(
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     progress(files.len(), specs.len());
+    check_scan(cancelled)?;
     let mut cameras: Vec<_> = files
         .iter()
         .map(|f| f.camera.clone())
@@ -1127,4 +1238,131 @@ pub fn validate_snapshot(preview: &Preview) -> Result<Vec<CopySpec>> {
         });
     }
     Ok(specs)
+}
+
+#[cfg(all(test, windows))]
+mod windows_cancellation_tests {
+    use super::*;
+    use std::{
+        os::windows::process::CommandExt,
+        time::{Duration, Instant},
+    };
+
+    fn process_alive(pid: u32) -> bool {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        use windows_sys::Win32::{
+            Foundation::STILL_ACTIVE,
+            System::Threading::{
+                GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+            },
+        };
+        let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        if raw.is_null() {
+            return false;
+        }
+        let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
+        let mut code = 0;
+        unsafe {
+            GetExitCodeProcess(handle.as_raw_handle(), &mut code) != 0
+                && code == STILL_ACTIVE as u32
+        }
+    }
+
+    #[test]
+    fn cancellation_drains_pipes_and_stops_metadata_child_tree() {
+        cancel_child_tree(false);
+    }
+
+    #[test]
+    fn cancellation_after_launcher_exit_still_owns_descendants() {
+        cancel_child_tree(true);
+    }
+
+    fn cancel_child_tree(launcher_exits: bool) {
+        let scratch = tempfile::tempdir().unwrap();
+        let script = scratch.path().join("取消扫描.ps1");
+        let pid_file = scratch.path().join("child.pid");
+        let parent_file = scratch.path().join("parent.pid");
+        fs::write(&script, r#"
+if ($env:FRAMEMOOR_CANCELLATION_CHILD -eq '1') {
+    [IO.File]::WriteAllText($env:FRAMEMOOR_CANCELLATION_PID, "$PID")
+    [Console]::Out.Write(' ' * 131072)
+    [Console]::Error.Write(' ' * 131072)
+    Start-Sleep -Seconds 60
+} else {
+    [IO.File]::WriteAllText($env:FRAMEMOOR_CANCELLATION_PARENT, "$PID")
+    $env:FRAMEMOOR_CANCELLATION_CHILD = '1'
+    if ($env:FRAMEMOOR_LAUNCHER_EXITS -eq '1') {
+        $start = New-Object System.Diagnostics.ProcessStartInfo
+        $start.FileName = Join-Path $PSHOME 'powershell.exe'
+        $start.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'
+        $start.UseShellExecute = $false
+        [Diagnostics.Process]::Start($start) | Out-Null
+    } else {
+        & (Join-Path $PSHOME 'powershell.exe') -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $PSCommandPath
+    }
+}
+"#).unwrap();
+        let powershell = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let mut command = Command::new(&powershell);
+        command
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+            ])
+            .arg(&script)
+            .env_remove("FRAMEMOOR_CANCELLATION_CHILD")
+            .env("FRAMEMOOR_CANCELLATION_PID", &pid_file)
+            .env("FRAMEMOOR_CANCELLATION_PARENT", &parent_file)
+            .env(
+                "FRAMEMOOR_LAUNCHER_EXITS",
+                if launcher_exits { "1" } else { "0" },
+            )
+            .creation_flags(0x08000000);
+        let cancelled = AtomicBool::new(false);
+        let started = Instant::now();
+        let pid = thread::scope(|scope| {
+            let canceller = scope.spawn(|| {
+                let deadline = Instant::now() + Duration::from_secs(10);
+                let pid = loop {
+                    if let Ok(value) = fs::read_to_string(&pid_file)
+                        && let Ok(pid) = value.parse::<u32>()
+                    {
+                        let parent_exited = fs::read_to_string(&parent_file)
+                            .ok()
+                            .and_then(|value| value.parse::<u32>().ok())
+                            .is_some_and(|pid| !process_alive(pid));
+                        if !launcher_exits || parent_exited {
+                            break Some(pid);
+                        }
+                    }
+                    if Instant::now() >= deadline {
+                        break None;
+                    }
+                    thread::sleep(Duration::from_millis(20));
+                };
+                cancelled.store(true, Ordering::SeqCst);
+                pid
+            });
+            let error = metadata_output(&mut command, None, &cancelled).unwrap_err();
+            assert_eq!(error.to_string(), "scan_cancelled");
+            canceller
+                .join()
+                .unwrap()
+                .expect("Metadata child did not start")
+        });
+        assert!(started.elapsed() < Duration::from_secs(20));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while process_alive(pid) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            !process_alive(pid),
+            "Metadata descendant survived cancellation"
+        );
+    }
 }

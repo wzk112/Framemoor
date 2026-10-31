@@ -1,0 +1,26 @@
+.simple-import-options{border:0;padding:0;margin:0;min-width:0}
+.simple-import-options>.panel{padding:20px}
+.simple-selection>.section-title{margin-bottom:18px}
+.simple-selection>.section-title>.text-button{padding-right:0}
+.simple-selection>label:first-of-type,.simple-preset>label:first-child{margin-top:0}
+.simple-date-range,.simple-project-fields,.simple-time-fields{margin:16px 0 0;gap:14px}
+.simple-media-types{display:flex;flex-wrap:wrap;gap:14px 24px;margin-top:20px}
+.simple-media-types .media-option>span{flex-wrap:wrap}
+.simple-undated{padding-top:16px;margin-top:16px!important;border-top:1px solid var(--line)}
+.simple-active-filters{padding:0 2px 20px;font-size:12px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.simple-active-filters h2{font-size:12px;font-weight:500;color:var(--text);margin:0 0 5px}
+.simple-active-filters p+p{margin-top:3px}
+.simple-active-filters strong{font-weight:500;color:var(--text)}
+.simple-advanced{border:1px solid var(--line);border-radius:8px;margin-bottom:20px;background:var(--surface)}
+.simple-advanced>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:14px 18px;font-size:13px;font-weight:500}
+.simple-advanced>summary::-webkit-details-marker{display:none}
+.simple-advanced>summary>svg{flex-shrink:0;color:var(--muted)}
+.simple-advanced[open]>summary{border-bottom:1px solid var(--line)}
+.simple-advanced[open]>summary>.simple-disclosure-chevron{transform:rotate(90deg)}
+.simple-advanced-body{padding:16px;background:var(--bg);border-radius:0 0 8px 8px}
+.simple-advanced-body>.panel:last-of-type{margin-bottom:0}
+.simple-advanced-body>.panel>label:first-child{margin-top:0}
+.simple-advanced-body .two-col{gap:14px}
+.simple-advanced-body .time-modes{flex-wrap:wrap}
+.simple-import-options:disabled input,.simple-import-options:disabled select{opacity:.6}
+@media(max-width:1150px){.simple-import-options .two-col{grid-template-columns:1fr}.simple-advanced-body{padding:12px}.simple-advanced-body .template-field{flex-wrap:wrap}.simple-advanced-body .template-field>input{flex-basis:100%}.simple-advanced-body .template-field>.variable-picker{max-width:100%}}
