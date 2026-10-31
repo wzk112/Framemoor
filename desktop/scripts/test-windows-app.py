@@ -253,17 +253,32 @@ def run_ui(driver, source, destination, verified, language, results):
     labels = ("素材来源", "目标文件夹", "扫描素材", "继续", "生成预览", "开始导入", "已确认以上提示") if language == "zh" else (
         "Media source", "Destination folder", "Scan media", "Continue", "Build preview", "Import without verification", "I have reviewed these warnings")
     destination.mkdir()
+    # Exercise the default simple view in Chinese and the full view in English.
+    if language == "zh":
+        assert driver.js("return document.querySelector('button[aria-pressed=true]').textContent") == "简易视图"
+        assert driver.js("return document.querySelectorAll('nav button').length") == 3
+    else:
+        driver.button("Detailed view")
+        assert driver.js("return document.querySelectorAll('nav button').length") == 5
     driver.field(labels[0], source)
     driver.field(labels[1], destination)
     driver.button(labels[2])
     # A date filter exercises actual metadata; extension-only scanning cannot pass.
     wait(lambda:"2026-10-20" in driver.body())
+    if language == "zh":
+        driver.select("simple-date-range", "custom")
     driver.field("开始日期" if language == "zh" else "From", "2026-10-20")
     driver.field("结束日期" if language == "zh" else "To", "2026-10-20")
-    driver.button(labels[3])
-    driver.element("//select[@id='layout-preset']")
-    driver.select("layout-preset", "builtin:original")
+    if language == "zh":
+        driver.select("simple-preset", "builtin:original")
+    else:
+        driver.button(labels[3])
+        driver.element("//select[@id='layout-preset']")
+        driver.select("layout-preset", "builtin:original")
     driver.button(labels[4])
+    # Confirm both destination representations use the same frozen plan.
+    wait(lambda:"视频_0001.MP4" in driver.body())
+    driver.button("文件" if language == "zh" else "Files")
     wait(lambda:"视频_0001.MP4" in driver.body())
     assert "2026-10-20" in driver.body()
     # Unknown camera layout / QuickTime UTC interpretation requires acknowledgement.
@@ -323,7 +338,7 @@ def main():
             check_copy(verified,expected,source_hashes)
             assert all("metadata_unavailable" not in row["issues"] for row in verified["preview"]["rows"])
             assert any(row["codec"]=="H264" for row in verified["preview"]["rows"])
-            report["checks"].append("Chinese UI, Unicode paths, date filter, H.264 metadata, sidecars, SHA-256 copy")
+            report["checks"].append("Chinese simple view, directory/file preview, Unicode paths, date filter, H.264 metadata, sidecars, SHA-256 copy")
             driver.button("设置");driver.select("settings-appearance","dark");driver.select("settings-language","en")
             driver.button("Performance")
             driver.click("//label[contains(.,'SHA-256')]//input[@type='checkbox']")
@@ -332,7 +347,7 @@ def main():
             driver.button("New import")
             unverified=run_ui(driver,source,root / "英文 未校验",False,"en",results)
             check_copy(unverified,expected,source_hashes)
-            report["checks"].append("English/dark UI, disabled-verification warning, unverified copy/report")
+            report["checks"].append("English detailed view/dark UI, disabled-verification warning, unverified copy/report")
             exported=results / "导入报告_日本語.json"
             driver.invoke("export_report",{"taskId":verified["id"],"path":str(exported)})
             assert json.loads(exported.read_text(encoding="utf-8"))["task"]["report"]["content_verified"]
@@ -351,6 +366,7 @@ def main():
             assert driver.js("return document.documentElement.dataset.theme")=="dark"
             assert len(driver.invoke("bootstrap")["tasks"])==2
             saved_settings=driver.invoke("bootstrap")["settings"]
+            assert saved_settings["import_view"]=="detailed"
             assert saved_settings["source"]==str(source)
             assert saved_settings["options"]["destination"]==str(root / "英文 未校验")
             assert driver.js("return document.getElementById('source-path').value")==str(source)
