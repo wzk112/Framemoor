@@ -215,11 +215,26 @@ fn snapshot(path: &Path) -> Result<(u64, u64)> {
 }
 
 pub fn discover(root: &Path) -> Result<Vec<CopySpec>> {
+    discover_checked(root, || Ok(()))
+}
+
+pub(crate) fn discover_checked(
+    root: &Path,
+    mut check: impl FnMut() -> Result<()>,
+) -> Result<Vec<CopySpec>> {
+    check()?;
     let root = fs::canonicalize(root)?;
     let mut result = Vec::new();
-    fn walk(root: &Path, directory: &Path, result: &mut Vec<CopySpec>) -> Result<()> {
+    fn walk(
+        root: &Path,
+        directory: &Path,
+        result: &mut Vec<CopySpec>,
+        check: &mut impl FnMut() -> Result<()>,
+    ) -> Result<()> {
+        check()?;
         platform::reject_link(directory)?;
         for item in fs::read_dir(directory)? {
+            check()?;
             let item = item?;
             let name = item.file_name();
             let name = name
@@ -231,7 +246,7 @@ pub fn discover(root: &Path) -> Result<Vec<CopySpec>> {
             }
             platform::reject_link(&item.path())?;
             if item.file_type()?.is_dir() {
-                walk(root, &item.path(), result)?;
+                walk(root, &item.path(), result, check)?;
             } else if item.file_type()?.is_file() {
                 let relative = item
                     .path()
@@ -250,7 +265,8 @@ pub fn discover(root: &Path) -> Result<Vec<CopySpec>> {
         }
         Ok(())
     }
-    walk(&root, &root, &mut result)?;
+    walk(&root, &root, &mut result, &mut check)?;
+    check()?;
     result.sort_by(|a, b| a.source.cmp(&b.source));
     Ok(result)
 }

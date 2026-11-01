@@ -4,7 +4,7 @@ import {openSettings,switchLanguage} from './helpers';
 async function reachPreset(page:Page,url='/tests/fixture.html'){await page.goto(url);await page.getByLabel('素材来源',{exact:true}).fill('/Volumes/EOS_DIGITAL');await page.getByLabel('目标文件夹',{exact:true}).fill('/test/destination');await page.getByRole('button',{name:'扫描素材'}).click();await expect(page.getByRole('heading',{name:'筛选',exact:true})).toBeVisible();await page.getByRole('button',{name:'继续',exact:true}).click();}
 test('successful report export retry clears the previous failure',async({page})=>{
   await reachPreset(page,'/tests/fixture.html?report=retry');
-  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   await page.getByLabel('已确认以上提示').check();
   await page.getByRole('button',{name:'开始导入',exact:true}).click();
   await page.getByRole('button',{name:'暂停',exact:true}).click();
@@ -32,15 +32,15 @@ test('multilingual paths and naming rules survive IPC and an interface language 
   await expect(page.getByLabel('Project name',{exact:true})).toHaveValue(text);
   await expect(page.getByLabel('Photo filename (without extension)',{exact:true})).toHaveValue(`${text}_{original}`);
   await expect.poll(()=>page.evaluate(()=>JSON.stringify((globalThis as unknown as {readSavedSettings:()=>unknown}).readSavedSettings()))).toContain(text);
-  await page.getByRole('button',{name:'Build preview',exact:true}).click();
-  await expect(page.locator('.destination-root')).toHaveText(`/destination/${text}`);
+  await page.getByRole('button',{name:'Build preview',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
+  await expect(page.locator('.destination-root > span').first()).toHaveText(`/destination/${text}`);
   await expect(page.locator('.target-path')).toHaveText(`${text}/2026-10-06/Photo/RAW/${text}_IMG_0001.CR3`);
   await expect(page.locator('html')).toHaveAttribute('lang','en');
   expect(await page.locator('body').innerText()).not.toContain('\ufffd');
 });
 test('Chinese workflow, warning acknowledgement, pause, resume and language switch',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(String(e)));
-  await reachPreset(page);await page.getByRole('button',{name:'生成预览'}).click();
+  await reachPreset(page);await page.getByRole('button',{name:'生成预览'}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   const start=page.getByRole('button',{name:'开始导入'});await expect(start).toBeDisabled();
   await expect(page.getByText('相机记录的偏移与拍摄地时区不同，请检查夏令时设置。')).toBeVisible();
   await page.getByLabel('已确认以上提示').check();await start.click();
@@ -49,16 +49,16 @@ test('Chinese workflow, warning acknowledgement, pause, resume and language swit
   await switchLanguage(page,'en');await expect(page.getByRole('heading',{name:'Import complete'})).toBeVisible();expect(errors).toEqual([]);
 });
 test('editing preset invalidates approved preview and conflict blocks import',async({page})=>{
-  await reachPreset(page);await page.getByRole('button',{name:'生成预览'}).click();await page.getByLabel('已确认以上提示').check();
+  await reachPreset(page);await page.getByRole('button',{name:'生成预览'}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();await page.getByLabel('已确认以上提示').check();
   await page.locator('footer').getByRole('button',{name:'返回',exact:true}).click();await page.getByLabel('项目名称').fill('CONFLICT');
   await expect(page.locator('nav').getByRole('button',{name:'预览 04'})).toBeDisabled();
-  await page.getByRole('button',{name:'生成预览'}).click();await expect(page.getByText('目标已存在，不会覆盖 · existing.CR3')).toBeVisible();
+  await page.getByRole('button',{name:'生成预览'}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();await expect(page.getByText('目标已存在，不会覆盖 · existing.CR3')).toBeVisible();
   await page.getByLabel('已确认以上提示').check();await expect(page.getByRole('button',{name:'开始导入'})).toBeDisabled();
 });
 test('language persists and custom preset can be saved and reapplied',async({page})=>{
   await reachPreset(page);await page.getByLabel('照片文件名（不含扩展名）',{exact:true}).fill('{date}_{seq}');await page.getByLabel('预设名称').fill('My preset');await page.getByRole('button',{name:'保存预设',exact:true}).click();
   await expect(page.locator('.saved-preset').getByText('My preset',{exact:true})).toBeVisible();await switchLanguage(page,'en');await expect(page.getByLabel('Photo filename (without extension)',{exact:true})).toHaveValue('{date}_{seq}');
-  await page.getByRole('button',{name:'Build preview'}).click();await expect(page.getByRole('heading',{name:'Import plan'})).toBeVisible();
+  await page.getByRole('button',{name:'Build preview'}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();await expect(page.getByRole('heading',{name:'Import plan'})).toBeVisible();
 });
 
 test('filters and presets are editable while metadata loads; preview waits for completion',async({page})=>{
@@ -81,7 +81,7 @@ test('filters and presets are editable while metadata loads; preview waits for c
   await page.evaluate(()=> (globalThis as unknown as {finishScan:()=>void}).finishScan());
   await expect(page.getByRole('heading',{name:'Folders and naming rules',exact:true})).toBeVisible();
   await expect(page.getByLabel('Project name')).toHaveValue('During scan');
-  await page.getByRole('button',{name:'Build preview',exact:true}).click();
+  await page.getByRole('button',{name:'Build preview',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   await expect(page.getByText('During scan/2026-10-06/Photo/RAW/20261006_181637_0001_IMG_0001.CR3',{exact:true})).toBeVisible();
 });
 
@@ -109,7 +109,7 @@ test('preset page shows destination folders and updates renamed files before imp
   await page.getByLabel('项目名称').fill('New project');
   await expect(tree.getByText('New project',{exact:true})).toBeVisible();
   await expect(tree.getByText('My Shoot',{exact:true})).not.toBeVisible();
-  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   await expect(page.getByText('New project/2026-10-06/Photo/RAW/20261006_181637_0001_IMG_0001.CR3',{exact:true})).toBeVisible();
 });
 
@@ -121,7 +121,7 @@ test('date and subject preset creates a first-level folder below the chosen dest
   await page.getByLabel('内容名称',{exact:true}).fill('街拍');
   await expect(tree.getByText('2026-10-06_街拍',{exact:true})).toBeVisible();
   await expect(tree.getByText('RAW',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   await expect(page.getByText('2026-10-06_街拍/Photo/RAW/20261006_181637_0001_IMG_0001.CR3',{exact:true})).toBeVisible();
 });
 
@@ -136,7 +136,7 @@ test('verification concurrency selects automatic hardware value and reaches the 
   await page.getByLabel('目标文件夹',{exact:true}).fill('/test/destination');
   await page.getByRole('button',{name:'扫描素材',exact:true}).click();
   await page.getByRole('button',{name:'继续',exact:true}).click();
-  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   await page.getByLabel('已确认以上提示').check();
   await page.getByRole('button',{name:'开始导入',exact:true}).click();
   await expect(page.locator('.import-details').getByText('4',{exact:true})).toBeVisible();
@@ -169,7 +169,7 @@ test('presets fill editable rules; each folder level and filename can change',as
   await expect(page.getByLabel('日期格式',{exact:true})).toHaveValue('DD-MM-YYYY');
   await expect(page.getByLabel('内容名称',{exact:true})).toHaveValue('');
   await page.getByLabel('内容名称',{exact:true}).fill('街拍');
-  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   await expect(page.getByText('06-10-2026 街拍/IMG_0001_0001.CR3',{exact:true})).toBeVisible();
 });
 
@@ -234,7 +234,7 @@ test('saved presets store rules only and applying any preset clears the subject'
   await page.getByLabel('预设',{exact:true}).selectOption('saved:0');
   await expect(page.getByLabel('内容名称',{exact:true})).toHaveValue('');
   await page.getByLabel('内容名称',{exact:true}).fill('这次拍摄');
-  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();await page.getByRole('button',{name:/^(文件|Files)$/,exact:true}).click();
   await expect(page.getByText('2026-10-06_这次拍摄/Photo/RAW/IMG_0001_0001.CR3',{exact:true})).toBeVisible();
 });
 

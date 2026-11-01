@@ -6,7 +6,7 @@
 
 A desktop tool for importing photos and videos from memory cards and folders. Choose files, configure destination folders and filenames, preview the result, then copy with SHA-256 verification.
 
-**Development preview (0.2).** macOS has been tested with Canon EOS R5 Mark II media. CI tests the installed Windows x64 app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation.
+**Development preview (0.3).** macOS has been tested with Canon EOS R5 Mark II media. CI tests the installed Windows x64 app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation.
 
 ## Download
 
@@ -17,16 +17,21 @@ A desktop tool for importing photos and videos from memory cards and folders. Ch
 
 See [release packaging and validation](docs/release-validation.md) for the tested environments and limitations. These are preview releases; keep another copy of important source media.
 
+## What changed in 0.3.0
+
+Simple import is now the default, with the detailed workflow still available. This release adds scan cancellation, device refresh, a directory/file switch in final preview, stage progress and opening the completed destination. Existing rules, verification settings and task records remain compatible. See the [release notes](https://github.com/wzk112/Framemoor/releases/tag/v0.3.0).
+
 ## Features
 
-- **Source and selection:** mounted storage and folder selection, recent paths, date ranges, media types, and video codec filters.
+- **Import views:** the default simple view groups source, destination, selection and preset in one page, followed by confirmation and import. Switch to the detailed five-step view without changing the draft. Advanced rules remain editable.
+- **Source and selection:** mounted storage and folder selection, device refresh, recent paths, date ranges, media types, and video codec filters. Active filters and time adjustments remain visible in the simple view and can be cleared.
 - **Folders and filenames:** editable directory levels, separate photo/video naming rules, clickable variables with help, built-in templates, and saved presets. Presets store rules only; applying one clears the shoot description.
-- **Preview:** destination directory tree, original and destination paths, capture times, available space, and conflicts. Changes require a fresh preview before import.
+- **Preview:** switch between the destination directory tree and file list, filter files with metadata warnings, and review capture times, available space, and conflicts. Changes require a fresh preview before import.
 - **Time handling:** camera time, recorded UTC offsets, IANA time zones, and manual minute adjustments. Future dates and time-zone differences are flagged. Embedded media metadata is not edited.
-- **Copying:** read-only source access, no overwrite of existing destination files, pause/resume, task history, and JSON reports. Recognized companion files are grouped with their media.
+- **Copying:** read-only source access, no overwrite of existing destination files, pause/resume, task history, JSON reports, and opening the completed task’s destination folder. Recognized companion files are grouped with their media.
 - **Settings:** Chinese/English, system/light/dark appearance, default destination and preset, completion notifications, sleep prevention during import, and verification concurrency.
 
-Scanning first lists files and classifies them by extension, then reads metadata in the background. Codec filters and import previews wait for metadata to finish. Every scan reads the source again; there is no persistent metadata or checksum cache.
+Scanning first lists files and classifies them by extension, then reads metadata in the background. Codec filters and import previews wait for metadata to finish. Scanning can be cancelled; a new scan waits for the previous readers to stop. Every scan reads the source again; there is no persistent metadata or checksum cache.
 
 ## Verification
 

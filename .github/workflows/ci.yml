@@ -75,6 +75,7 @@ jobs:
         with:
           path: desktop/src-tauri/target
           key: desktop-${{ runner.os }}-${{ runner.arch }}-1.90-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-${{ runner.os }}-${{ runner.arch }}-1.90-
       - run: npm ci
       - run: npm run build
       - run: python3 scripts/prepare-resources.py
@@ -84,6 +85,8 @@ jobs:
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Remove restored installer bundles
+        run: python3 -c "from pathlib import Path; import shutil; p = Path('src-tauri/target/release/bundle'); shutil.rmtree(p) if p.exists() else None"
       - name: Build macOS Release app and DMG
         run: npm run tauri build -- --ci --bundles app,dmg
       - name: Check macOS package
@@ -127,7 +130,9 @@ jobs:
           path: |
             desktop/src-tauri/target
           key: desktop-windows-x64-1.90-edge-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
-          restore-keys: desktop-windows-x64-1.90-driver2.1-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            desktop-windows-x64-1.90-edge-
+            desktop-windows-x64-1.90-driver2.1-
       - run: npm ci
       - run: python scripts/prepare-resources.py
       - run: python scripts/prepare-windows-resources.py
@@ -145,6 +150,8 @@ jobs:
             choco install ffmpeg --yes --no-progress
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+      - name: Remove restored installer bundles
+        run: python -c "from pathlib import Path; import shutil; p = Path('src-tauri/target/release/bundle'); shutil.rmtree(p) if p.exists() else None"
       - name: Build Windows NSIS installer
         id: windows-build
         run: npm run tauri build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
@@ -152,8 +159,9 @@ jobs:
         run: cargo test --release --manifest-path src-tauri/Cargo.toml --locked
       - name: Install and test the real Windows application
         run: |
-          $installer = (Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName
-          if (-not $installer) { throw 'NSIS installer was not produced' }
+          $installers = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe)
+          if ($installers.Count -ne 1) { throw 'Expected exactly one newly built NSIS installer' }
+          $installer = $installers[0].FullName
           python scripts/test-windows-app.py --installer $installer --native-driver $env:FRAMEMOOR_EDGE_DRIVER
       - name: Prepare downloadable installer and corresponding source
         run: |

@@ -236,3 +236,211 @@ fn preliminary_inventory_precedes_reads_and_is_not_a_catalog() {
     assert!(inventory_seen);
     assert_eq!(catalog.file_count, 3);
 }
+
+#[test]
+fn cancellation_before_reads_and_after_final_progress_never_returns_a_catalog() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let source = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    let tool = tracked_tool(tools.path());
+    fs::write(source.path().join("中文.CR3"), "2026:10:06 18:00:00").unwrap();
+    let cancelled = AtomicBool::new(true);
+    let error = workflow::scan_cancellable(
+        source.path(),
+        &tool,
+        4,
+        &cancelled,
+        |_| panic!("Cancelled scan must not publish an inventory"),
+        |_, _| {},
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), "scan_cancelled");
+    assert!(!tools.path().join("readers.txt").exists());
+
+    cancelled.store(false, Ordering::SeqCst);
+    let error = workflow::scan_cancellable(
+        source.path(),
+        &tool,
+        4,
+        &cancelled,
+        |_| cancelled.store(true, Ordering::SeqCst),
+        |_, _| {},
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), "scan_cancelled");
+    assert!(!tools.path().join("readers.txt").exists());
+
+    cancelled.store(false, Ordering::SeqCst);
+    let error = workflow::scan_cancellable(
+        source.path(),
+        &tool,
+        4,
+        &cancelled,
+        |_| {},
+        |done, total| {
+            if done == total {
+                cancelled.store(true, Ordering::SeqCst);
+            }
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), "scan_cancelled");
+    assert!(
+        fs::read_to_string(tools.path().join("readers.txt"))
+            .unwrap()
+            .starts_with("0 ")
+    );
+    // Cancellation is per request; a fresh scan still returns all source files.
+    assert_eq!(
+        workflow::scan(source.path(), &tool, |_, _| {})
+            .unwrap()
+            .file_count,
+        1
+    );
+}
+
+#[test]
+fn cancellation_stops_all_active_metadata_processes_before_returning() {
+    use std::{
+        sync::atomic::{AtomicBool, Ordering},
+        time::{Duration, Instant},
+    };
+    let source = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    let tool = tools.path().join("slow-metadata.pl");
+    fs::write(
+        &tool,
+        r#"
+use strict; use warnings; use FindBin qw($RealBin); use Fcntl qw(:flock);
+open my $pids, '>>', "$RealBin/pids.txt" or die $!;
+flock($pids, LOCK_EX) or die $!; print $pids "$$\n"; close $pids;
+$|=1; print ' ' x 131072; print STDERR ' ' x 131072;
+sleep 60; print '[]';
+"#,
+    )
+    .unwrap();
+    for i in 0..32 {
+        fs::write(source.path().join(format!("视频{i:02}.MP4")), b"fixture").unwrap();
+    }
+    let cancelled = AtomicBool::new(false);
+    let started = Instant::now();
+    let pids = std::thread::scope(|scope| {
+        let canceller = scope.spawn(|| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let pids = loop {
+                let pids: Vec<i32> = fs::read_to_string(tools.path().join("pids.txt"))
+                    .unwrap_or_default()
+                    .lines()
+                    .filter_map(|line| line.parse().ok())
+                    .collect();
+                if pids.len() == 4 || Instant::now() >= deadline {
+                    break pids;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            };
+            cancelled.store(true, Ordering::SeqCst);
+            pids
+        });
+        let error =
+            workflow::scan_cancellable(source.path(), &tool, 4, &cancelled, |_| {}, |_, _| {})
+                .unwrap_err();
+        assert_eq!(error.to_string(), "scan_cancelled");
+        canceller.join().unwrap()
+    });
+    assert_eq!(
+        pids.len(),
+        4,
+        "Fixture must exercise all four active readers"
+    );
+    assert!(started.elapsed() < Duration::from_secs(10));
+    for pid in pids {
+        assert_eq!(
+            unsafe { libc::kill(pid, 0) },
+            -1,
+            "Metadata child {pid} survived cancellation"
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ESRCH)
+        );
+    }
+    assert_eq!(fs::read_dir(source.path()).unwrap().count(), 32);
+    assert_eq!(
+        fs::read(source.path().join("视频00.MP4")).unwrap(),
+        b"fixture"
+    );
+}
+
+#[test]
+fn cancellation_after_launcher_exit_stops_helper_holding_output_pipes() {
+    use std::{
+        sync::atomic::{AtomicBool, Ordering},
+        time::{Duration, Instant},
+    };
+    let source = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    fs::write(source.path().join("one.MP4"), b"fixture").unwrap();
+    let tool = tools.path().join("launcher.pl");
+    fs::write(
+        &tool,
+        r#"
+use strict; use warnings; use FindBin qw($RealBin);
+my $launcher=$$;
+my $child=fork(); die $! unless defined($child);
+exit 0 if $child;
+open my $pid, '>', "$RealBin/helper.txt" or die $!;
+print $pid "$launcher $$"; close $pid;
+$|=1; print ' ' x 131072; print STDERR ' ' x 131072;
+sleep 15; print '[]';
+"#,
+    )
+    .unwrap();
+    let cancelled = AtomicBool::new(false);
+    let started = Instant::now();
+    let helper = std::thread::scope(|scope| {
+        let canceller = scope.spawn(|| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let helper = loop {
+                let pids: Vec<i32> = fs::read_to_string(tools.path().join("helper.txt"))
+                    .unwrap_or_default()
+                    .split_whitespace()
+                    .filter_map(|v| v.parse().ok())
+                    .collect();
+                // Wait until the scanner has reaped the launcher. The helper
+                // still owns the inherited pipes when cancellation is issued.
+                if pids.len() == 2 && unsafe { libc::kill(pids[0], 0) } == -1 {
+                    break Some(pids[1]);
+                }
+                if Instant::now() >= deadline {
+                    break None;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            };
+            cancelled.store(true, Ordering::SeqCst);
+            helper
+        });
+        let error =
+            workflow::scan_cancellable(source.path(), &tool, 1, &cancelled, |_| {}, |_, _| {})
+                .unwrap_err();
+        assert_eq!(error.to_string(), "scan_cancelled");
+        canceller
+            .join()
+            .unwrap()
+            .expect("Launcher must exit before cancellation")
+    });
+    assert!(started.elapsed() < Duration::from_secs(10));
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while unsafe { libc::kill(helper, 0) } == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        unsafe { libc::kill(helper, 0) },
+        -1,
+        "Orphan metadata helper survived cancellation"
+    );
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ESRCH)
+    );
+    assert_eq!(fs::read(source.path().join("one.MP4")).unwrap(), b"fixture");
+}
