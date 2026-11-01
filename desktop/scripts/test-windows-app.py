@@ -315,6 +315,7 @@ def main():
     assert exiftool.is_file(), list(install.iterdir())
     assert subprocess.check_output([str(exiftool),"-ver"],text=True).strip()=="13.59"
     assert (install / "notices/LICENSE").is_file()
+    expected_version=json.loads((Path(__file__).resolve().parents[1] / "src-tauri/tauri.conf.json").read_text(encoding="utf-8"))["version"]
     source, source_hashes=fixture(root, exiftool)
     expected={name for name in source_hashes if "照片_0002" not in name}
     environment=dict(os.environ, FRAMEMOOR_DATA_DIR=str(root / "state"),
@@ -332,7 +333,10 @@ def main():
             driver.start(binary)
             report["webview_version"]=driver.capabilities.get("browserVersion")
             wait(lambda:"素材来源" in driver.body())
-            assert driver.invoke("bootstrap")["metadata_ready"]
+            bootstrap=driver.invoke("bootstrap")
+            assert bootstrap["metadata_ready"]
+            assert bootstrap["version"] == expected_version, bootstrap["version"]
+            report["app_version"]=bootstrap["version"]
             report["checks"].append("NSIS install, packaged ExifTool, real WebView2 startup")
             verified=run_ui(driver,source,root / "中文 已校验",True,"zh",results)
             check_copy(verified,expected,source_hashes)

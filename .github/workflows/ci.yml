@@ -75,6 +75,7 @@ jobs:
         with:
           path: desktop/src-tauri/target
           key: desktop-${{ runner.os }}-${{ runner.arch }}-1.90-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-${{ runner.os }}-${{ runner.arch }}-1.90-
       - run: npm ci
       - run: npm run build
       - run: python3 scripts/prepare-resources.py
@@ -127,7 +128,9 @@ jobs:
           path: |
             desktop/src-tauri/target
           key: desktop-windows-x64-1.90-edge-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
-          restore-keys: desktop-windows-x64-1.90-driver2.1-${{ hashFiles('Cargo.lock', 'desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            desktop-windows-x64-1.90-edge-
+            desktop-windows-x64-1.90-driver2.1-
       - run: npm ci
       - run: python scripts/prepare-resources.py
       - run: python scripts/prepare-windows-resources.py

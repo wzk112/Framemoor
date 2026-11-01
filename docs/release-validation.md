@@ -2,7 +2,7 @@
 
 ## Packages
 
-Version 0.2.0 is a development preview. The release provides macOS Apple Silicon and Windows x64 installers, corresponding source, dependency notices, and SHA-256 checksums. Do not describe these packages as signed/notarized production releases.
+Version 0.3.0 is a development preview. The release provides macOS Apple Silicon and Windows x64 installers, corresponding source, dependency notices, and SHA-256 checksums. Do not describe these packages as signed/notarized production releases.
 
 | Platform | Package | Requirements | Signing |
 | --- | --- | --- | --- |
@@ -11,7 +11,11 @@ Version 0.2.0 is a development preview. The release provides macOS Apple Silicon
 
 The app bundles ExifTool 13.59 and license notices. `notices/SOURCE.txt` identifies the source revision and Rust target. `prepare-notices.py` selects the host target unless `--target` is supplied; fallbacks are version- and checksum-bound to upstream material. The macOS Release profile retains optimization and thin LTO but disables stripping: Rust 1.90 can produce misaligned Mach-O string pools that macOS 27 rejects ([upstream issue](https://github.com/rust-lang/rust/issues/157750)).
 
-## Native checks, 2026-10-27
+## 0.3.0 validation scope
+
+The simple and detailed views share the existing import engine. Browser tests exercise both languages, light/dark layouts, retained drafts, cancellation/retry and warning acknowledgements using mocked IPC. Core regressions cover cancelling metadata workers and descendant processes without retaining a partial catalog. Windows CI exercises the installed app through real WebView2 on a Windows Server VM, including Chinese simple and English detailed imports. macOS package and startup checks are recorded separately from interactive UI checks; the 0.2.0 interactive results below are historical, not a fresh validation of the 0.3.0 interface. The release notes identify the final tested commit and any remaining limits.
+
+## Native checks for 0.2.0, 2026-10-27
 
 On macOS 27.2 / arm64, a Release app was copied from a read-only mounted DMG into a temporary installation directory containing Chinese, Japanese and emoji characters. DMG verification, strict recursive code-signature verification, app version/architecture, and bundled ExifTool startup passed. App data was isolated with `FRAMEMOOR_DATA_DIR`; the normal installation, settings and personal media were not used.
 
@@ -35,11 +39,15 @@ The minimum OS versions are build targets, not a claim that every OS version has
 
 ## 安装包
 
-0.2.0 是开发预览版，提供 macOS Apple Silicon 与 Windows x64 安装包、对应源码、依赖声明和 SHA-256。macOS 需要 13+，DMG 中包含应用及“应用程序”快捷方式，采用 ad-hoc 签名，未使用 Developer ID 签名或公证。Windows 需要 10 1903+ 或 Windows 11 以及 WebView2，NSIS 按当前用户安装，安装包未签名。
+0.3.0 是开发预览版，提供 macOS Apple Silicon 与 Windows x64 安装包、对应源码、依赖声明和 SHA-256。macOS 需要 13+，DMG 中包含应用及“应用程序”快捷方式，采用 ad-hoc 签名，未使用 Developer ID 签名或公证。Windows 需要 10 1903+ 或 Windows 11 以及 WebView2，NSIS 按当前用户安装，安装包未签名。
 
 应用包含 ExifTool 13.59 与许可证，`notices/SOURCE.txt` 记录源码版本和 Rust 目标。声明脚本默认选择宿主目标，也可传入 `--target`；补充声明固定上游版本和校验值。macOS Release 保留优化与 thin LTO，仅关闭符号裁剪，避免 Rust 1.90 生成 macOS 27 拒绝加载的 Mach-O 文件，见上方上游问题链接。
 
-## 2026-10-27 原生验证
+## 0.3.0 验证范围
+
+简易视图与详细视图共用现有导入引擎。浏览器测试通过模拟 IPC 检查中英双语、浅深色布局、配置保留、取消后重试与提示确认；核心回归测试检查元数据工作线程及其子进程取消，并确保不保留不完整的扫描清单。Windows CI 在 Windows Server 虚拟机中，通过真实 WebView2 验证安装后的中文简易流程和英文详细流程。macOS 的安装包与启动检查和交互界面检查分别记录；下方 0.2.0 的交互测试是历史结果，不代表 0.3.0 界面已重新验证。发行说明记录最终测试提交及剩余限制。
+
+## 0.2.0 原生验证，2026-10-27
 
 在 macOS 27.2 / arm64 上，只读挂载 DMG，将 Release 应用复制到含中文、日文和 emoji 的临时安装目录。镜像完整性、递归签名、版本/架构及随包 ExifTool 启动检查通过。使用 `FRAMEMOOR_DATA_DIR` 隔离测试设置，未使用正常安装的应用、设置或个人素材。
 

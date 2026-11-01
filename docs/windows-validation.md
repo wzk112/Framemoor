@@ -9,7 +9,7 @@ The required CI gate includes:
 - Rust core tests on Windows and macOS, frontend unit/browser tests, and both native desktop backends.
 - Real ExifTool metadata extraction for 70 files under deep Chinese paths, with a batch exceeding Windows' command-line limit. These fixtures deliberately have a CR3 extension but PNG content; the expected classification is PNG. This is not a Canon RAW-format test.
 - Installed ExifTool and its runtime resources, Chinese install/source/destination paths, capture-date filtering, H.264 metadata, and a companion XMP file.
-- Chinese UI with SHA-256 verification and English/dark UI with verification disabled. An independent test hash comparison checks both copy results; the app must still mark the second task as unverified.
+- Chinese simple view with SHA-256 verification and English/dark detailed view with verification disabled. The installed app version must match the release configuration. An independent test hash comparison checks both copy results; the app must still mark the second task as unverified.
 - Existing destination conflict detection, unchanged source bytes, JSON report export, saved settings/task history after restart, and uninstall.
 - Windows thread execution-state acquisition/release for idle-sleep prevention. This checks the OS API state, not an actual unattended sleep cycle.
 
@@ -32,7 +32,7 @@ This does not certify Windows 10/11 hardware, ARM64, every camera model or Unico
 - Windows/macOS Rust 核心测试、前端单元与浏览器测试，以及两个平台的桌面后端测试。
 - 使用真实 ExifTool 读取深层中文路径下的 70 个文件，批量路径总长度超过 Windows 命令行限制。文件故意使用 CR3 扩展名、实际内容为 PNG，必须按内容识别为 PNG；这不代表验证了佳能 RAW 格式。
 - 已安装的 ExifTool 及运行依赖、中文安装/来源/目标路径、拍摄日期筛选、H.264 元数据和 XMP 伴随文件。
-- 中文界面下启用 SHA-256 导入，英文深色界面下关闭校验导入。测试程序独立比对两次复制结果的哈希，但应用仍须将第二个任务标记为未校验。
+- 中文简易视图下启用 SHA-256 导入，英文深色详细视图下关闭校验导入。已安装应用的版本必须与发行配置一致。测试程序独立比对两次复制结果的哈希，但应用仍须将第二个任务标记为未校验。
 - 已有目标文件冲突、来源内容不变、JSON 报告导出、重启后设置和历史保留、卸载。
 - Windows 防休眠执行状态的申请与释放。这里验证的是系统 API 状态，没有实际等待一次自动休眠周期。
 

@@ -6,7 +6,7 @@
 
 A desktop tool for importing photos and videos from memory cards and folders. Choose files, configure destination folders and filenames, preview the result, then copy with SHA-256 verification.
 
-**Development preview (0.2).** macOS has been tested with Canon EOS R5 Mark II media. CI tests the installed Windows x64 app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation.
+**Development preview (0.3).** macOS has been tested with Canon EOS R5 Mark II media. CI tests the installed Windows x64 app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation.
 
 ## Download
 
@@ -16,6 +16,10 @@ A desktop tool for importing photos and videos from memory cards and folders. Ch
 - **Windows 10 1903+ / Windows 11:** run the installer. WebView2 is required; the installer can download it when missing. The installer is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.
 
 See [release packaging and validation](docs/release-validation.md) for the tested environments and limitations. These are preview releases; keep another copy of important source media.
+
+## What changed in 0.3.0
+
+Simple import is now the default, with the detailed workflow still available. This release adds scan cancellation, device refresh, a directory/file switch in final preview, stage progress and opening the completed destination. Existing rules, verification settings and task records remain compatible. See the [release notes](https://github.com/wzk112/Framemoor/releases/tag/v0.3.0).
 
 ## Features
 
