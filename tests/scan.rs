@@ -24,6 +24,8 @@ for my $path (grep { -f $_ } @ARGV) {
     $record->{'ExifIFD:DateTimeOriginal'}=$date unless $fallback && $fast;
     push @records, $record;
 }
+
+
 print encode_json(\@records);
 "#,
     )
@@ -443,4 +445,77 @@ sleep 15; print '[]';
         Some(libc::ESRCH)
     );
     assert_eq!(fs::read(source.path().join("one.MP4")).unwrap(), b"fixture");
+}
+
+#[test]
+fn raw_video_inventory_and_catalog_keep_concrete_codec_metadata() {
+    let source = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    let metadata_tool = tools.path().join("raw-metadata.pl");
+    fs::write(
+        &metadata_tool,
+        r#"
+use strict; use warnings; use JSON::PP;
+die 'missing CompressorName query' unless grep { $_ eq '-CompressorName' } @ARGV;
+die 'missing MXF codec query' unless grep { $_ eq '-VideoCompressionAlgorithm' } @ARGV;
+my @records;
+for my $path (grep { -f $_ } @ARGV) {
+    open my $fh,'<',$path or die $!;
+    local $/; my $record=decode_json(<$fh>);
+    $record->{'SourceFile'}=$path;
+    push @records,$record;
+}
+print encode_json(\@records);
+"#,
+    )
+    .unwrap();
+    let fixtures = [
+        (
+            "blackmagic.braw",
+            serde_json::json!({"File:FileType":"MOV","Track1:CompressorName":"Blackmagic RAW"}),
+        ),
+        (
+            "nikon.nev",
+            serde_json::json!({"File:FileType":"MOV","Track3:CompressorName":"Nikon N-RAW"}),
+        ),
+        ("frame.ari", serde_json::json!({"File:FileType":"ARI"})),
+        (
+            "clip.mxf",
+            serde_json::json!({"File:FileType":"MXF","MXF:VideoCompressionAlgorithm":"X-OCN ST"}),
+        ),
+        ("photo.dng", serde_json::json!({"File:FileType":"DNG"})),
+    ];
+    for (name, record) in fixtures {
+        fs::write(source.path().join(name), record.to_string()).unwrap();
+    }
+    let mut inventory = None;
+    let catalog = workflow::scan_observed(
+        source.path(),
+        &metadata_tool,
+        2,
+        |i| inventory = Some(i.clone()),
+        |_, _| {},
+    )
+    .unwrap();
+    let inventory = inventory.unwrap();
+    assert_eq!(
+        (
+            inventory.photo_groups,
+            inventory.video_groups,
+            inventory.other_groups
+        ),
+        (1, 4, 0)
+    );
+    assert_eq!(
+        catalog.codecs,
+        vec!["ARRIRAW", "Blackmagic_RAW", "N_RAW", "X_OCN"]
+    );
+    assert_eq!(
+        catalog.groups.iter().filter(|g| g.kind == "video").count(),
+        4
+    );
+    assert_eq!(
+        catalog.groups.iter().filter(|g| g.kind == "photo").count(),
+        1
+    );
 }

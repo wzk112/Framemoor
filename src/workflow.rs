@@ -174,27 +174,150 @@ fn text_tag(value: &Value, keys: &[&str]) -> String {
         .unwrap_or("")
         .to_string()
 }
+
+// RAW is a selection family, not a replacement for the concrete codec used
+// by directory templates. Photo RAW is deliberately absent from this list.
+pub fn is_raw_video_codec(codec: &str) -> bool {
+    matches!(
+        codec,
+        "Canon_RAW"
+            | "Blackmagic_RAW"
+            | "RED_RAW"
+            | "N_RAW"
+            | "ARRIRAW"
+            | "ProRes_RAW"
+            | "X_OCN"
+            | "Cine_RAW"
+    )
+}
+
+fn raw_video_format(format: &str) -> Option<&'static str> {
+    match format {
+        "CRM" => Some("Canon_RAW"),
+        "BRAW" => Some("Blackmagic_RAW"),
+        "R3D" => Some("RED_RAW"),
+        "NEV" => Some("N_RAW"),
+        "ARI" | "ARX" => Some("ARRIRAW"),
+        _ => None,
+    }
+}
+
+fn quicktime_codec_tag(key: &str, tag: &str) -> bool {
+    let Some((group, name)) = key.split_once(':') else {
+        return false;
+    };
+    name == tag
+        && (group == "QuickTime"
+            || group.strip_prefix("Track").is_some_and(|number| {
+                !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())
+            }))
+}
+
+fn named_video_codec(name: &str) -> Option<&'static str> {
+    // Match explicit encoding names, never the camera model, filename, a
+    // generic "raw" pixel format, or an arbitrary substring of metadata.
+    let normalized: String = name
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .flat_map(char::to_lowercase)
+        .collect();
+    match normalized.as_str() {
+        "blackmagicraw" => Some("Blackmagic_RAW"),
+        "nraw" | "nikonraw" | "nikonnraw" => Some("N_RAW"),
+        "redcoderaw" | "redraw" => Some("RED_RAW"),
+        "arriraw" | "arrirawhde" => Some("ARRIRAW"),
+        "proresraw" | "proresrawhq" | "appleproresraw" | "appleproresrawhq" => Some("ProRes_RAW"),
+        "cinemarawlight" | "canoncinemarawlight" | "canonraw" => Some("Canon_RAW"),
+        "xocn" | "xocnlt" | "xocnst" | "xocnxt" | "sonyxocn" | "sonyxocnlt" | "sonyxocnst"
+        | "sonyxocnxt" => Some("X_OCN"),
+        "cineraw" | "phantomraw" | "phantomcineraw" => Some("Cine_RAW"),
+        _ => None,
+    }
+}
+
+fn video_codec_identifier(identifier: &str) -> Option<&'static str> {
+    match identifier.to_ascii_lowercase().as_str() {
+        "hvc1" | "hev1" => Some("HEVC"),
+        "avc1" | "avc3" => Some("H264"),
+        "apch" | "apcn" | "apcs" | "apco" | "ap4h" | "ap4x" => Some("ProRes"),
+        "aprn" | "aprh" => Some("ProRes_RAW"),
+        // Observed in Blackmagic's RAW Speed Test bundled profile.braw;
+        // ExifTool reports its container as MOV and exposes this FourCC.
+        "brhq" => Some("Blackmagic_RAW"),
+        _ => None,
+    }
+}
+
+fn video_codec(format: &str, metadata: &Value) -> &'static str {
+    if let Some(codec) = raw_video_format(format) {
+        return codec;
+    }
+    let Some(tags) = metadata.as_object() else {
+        return "Unknown";
+    };
+    // Audio, timecode or preview tracks may precede the RAW video track.
+    // Prefer a RAW identifier across all tracks, retaining a non-RAW fallback.
+    let mut fallback = None;
+    for (key, value) in tags {
+        if !quicktime_codec_tag(key, "CompressorID") {
+            continue;
+        }
+        let Some(codec) = value.as_str().and_then(video_codec_identifier) else {
+            continue;
+        };
+        if is_raw_video_codec(codec) {
+            return codec;
+        }
+        fallback.get_or_insert(codec);
+    }
+    for (key, value) in tags {
+        if quicktime_codec_tag(key, "CompressorName") {
+            let (group, _) = key.split_once(':').unwrap();
+            let identifier = tags
+                .get(&format!("{group}:CompressorID"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            // A readable name cannot override an explicit non-RAW ID on
+            // its own track. The "raw " ID denotes uncompressed RGB.
+            if video_codec_identifier(identifier).is_some() || identifier == "raw " {
+                continue;
+            }
+        } else if key != "MXF:VideoCompressionAlgorithm" {
+            continue;
+        }
+        if let Some(codec) = value.as_str().and_then(named_video_codec) {
+            return codec;
+        }
+    }
+    fallback.unwrap_or("Unknown")
+}
+
 pub fn describe(path: String, bytes: u64, modified_ns: u64, metadata: &Value) -> MediaFile {
     let ext = Path::new(&path)
         .extension()
         .unwrap_or_default()
         .to_string_lossy()
         .to_uppercase();
-    let format = text_tag(metadata, &["File:FileType"]);
-    let format = if format.is_empty() {
+    let detected_format = text_tag(metadata, &["File:FileType"])
+        .trim()
+        .to_ascii_uppercase();
+    let format = if detected_format.is_empty() {
         ext.clone()
     } else {
-        format
+        detected_format.clone()
     };
     let kind = if [
         "CR3", "CR2", "CRW", "NEF", "NRW", "ARW", "SR2", "SRF", "RAF", "ORF", "RW2", "PEF", "DNG",
-        "JPG", "JPEG", "HEIC", "HEIF", "HIF", "TIFF", "TIF", "PNG",
+        "3FR", "FFF", "IIQ", "RWL", "SRW", "X3F", "GPR", "MRW", "ERF", "MEF", "MOS", "DCR", "KDC",
+        "K25", "ORI", "JPG", "JPEG", "HEIC", "HEIF", "HIF", "TIFF", "TIF", "PNG", "INSP",
     ]
     .contains(&format.as_str())
+        || detected_format == "RAW"
     {
         "photo"
     } else if [
-        "MP4", "MOV", "CRM", "MXF", "MTS", "M2TS", "AVI", "BRAW", "R3D", "INSV", "360",
+        "MP4", "MOV", "CRM", "MXF", "MTS", "M2TS", "AVI", "BRAW", "R3D", "NEV", "ARI", "ARX",
+        "CINE", "INSV", "360",
     ]
     .contains(&format.as_str())
     {
@@ -202,31 +325,20 @@ pub fn describe(path: String, bytes: u64, modified_ns: u64, metadata: &Value) ->
     } else {
         "other"
     };
-    let compressor = text_tag(
-        metadata,
-        &[
-            "Track1:CompressorID",
-            "Track2:CompressorID",
-            "QuickTime:CompressorID",
-        ],
-    );
     let codec = if kind == "photo" {
-        if ["JPEG", "JPG", "HEIC", "HEIF", "HIF", "TIFF", "TIF", "PNG"].contains(&format.as_str()) {
+        if [
+            "JPEG", "JPG", "HEIC", "HEIF", "HIF", "TIFF", "TIF", "PNG", "INSP",
+        ]
+        .contains(&format.as_str())
+        {
             format.clone()
         } else {
             "RAW".into()
         }
-    } else if format == "CRM" {
-        "Canon_RAW".into()
+    } else if kind == "video" {
+        video_codec(&format, metadata).into()
     } else {
-        match compressor.to_lowercase().as_str() {
-            "hvc1" | "hev1" => "HEVC",
-            "avc1" | "avc3" => "H264",
-            "apch" | "apcn" | "apcs" | "apco" | "ap4h" | "ap4x" => "ProRes",
-            "aprn" | "aprh" => "ProRes_RAW",
-            _ => "Unknown",
-        }
-        .into()
+        "Unknown".into()
     };
     let camera = text_tag(
         metadata,
@@ -500,6 +612,8 @@ fn scan_metadata(
         "-OffsetTimeOriginal",
         "-TimeZone",
         "-CompressorID",
+        "-CompressorName",
+        "-VideoCompressionAlgorithm",
         "-QuickTime:CreateDate",
     ]);
     // ExifTool 13.59 -fast skips CR3 media-data scanning, but keeps EXIF and
@@ -900,7 +1014,19 @@ fn select_groups<'a>(
             continue;
         }
         let primary = &group.files[0];
-        if group.kind == "video" && !options.codec.is_empty() && primary.codec != options.codec {
+        if group.kind == "video"
+            && !options.codec.is_empty()
+            // A RAW clip and its same-name proxy may be one existing group.
+            // Keep that group when any video matches, regardless of which
+            // filename sorts first; companion matching itself is unchanged.
+            && !group.files.iter().filter(|file| file.kind == "video").any(|file| {
+                if options.codec == "RAW" {
+                    is_raw_video_codec(&file.codec)
+                } else {
+                    file.codec == options.codec
+                }
+            })
+        {
             continue;
         }
         let (resolved, issues) = resolve_time(primary, options, now)?;

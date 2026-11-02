@@ -56,7 +56,7 @@ mockIPC(async(cmd,args)=>{
         if(cancelledScans.has(p.scanId))throw 'scan_cancelled';
         if(mode==='failed')throw 'source_changed';
       }
-      return {id:'catalog',root:p.source,profile:'canon_r5m2',groups:[{id:'photo',kind:'photo',files:[file]}],file_count:1,bytes:file.bytes,cameras:[file.camera],codecs:['HEVC']};
+      return {id:'catalog',root:p.source,profile:'canon_r5m2',groups:[{id:'photo',kind:'photo',files:[file]}],file_count:1,bytes:file.bytes,cameras:[file.camera],codecs:query.get('codecs')==='raw'?['Blackmagic_RAW','Canon_RAW','HEVC','ProRes_RAW','RED_RAW']:['HEVC']};
     }
     case 'preview_layout':
     case 'build_preview':{
