@@ -33,6 +33,8 @@ Simple import is now the default, with the detailed workflow still available. Th
 
 Scanning first lists files and classifies them by extension, then reads metadata in the background. Codec filters and import previews wait for metadata to finish. Scanning can be cancelled; a new scan waits for the previous readers to stop. Every scan reads the source again; there is no persistent metadata or checksum cache.
 
+See [media formats and recognition](docs/media-formats.md) for common brands, RAW video filtering, and the distinction between released 0.3.0 behavior and unreleased additions.
+
 ## Verification
 
 SHA-256 verification is **enabled by default**. It reads source content, checks copied content, and performs additional source/destination checks during the task. Parallel reads are configurable; writes and task journal updates remain sequential.

@@ -55,6 +55,219 @@ fn canon_container_and_track_are_not_confused() {
     assert_eq!(video.codec, "HEVC");
     assert_eq!(media("a.CRM", "CRM", "").codec, "Canon_RAW");
 }
+
+#[test]
+fn raw_video_formats_keep_concrete_codecs_and_metadata_wins_over_extensions() {
+    for (format, codec) in [
+        ("CRM", "Canon_RAW"),
+        ("BRAW", "Blackmagic_RAW"),
+        ("R3D", "RED_RAW"),
+        ("NEV", "N_RAW"),
+        ("ARI", "ARRIRAW"),
+        ("ARX", "ARRIRAW"),
+    ] {
+        let f = describe("renamed.jpg".into(), 4, 0, &json!({"File:FileType":format}));
+        assert_eq!((&*f.kind, &*f.codec), ("video", codec));
+        assert!(is_raw_video_codec(&f.codec));
+        let hinted = describe(
+            format!("clip.{}", format.to_lowercase()),
+            4,
+            0,
+            &serde_json::Value::Null,
+        );
+        assert_eq!((&*hinted.kind, &*hinted.codec), ("video", codec));
+        assert!(hinted.issues.contains(&"metadata_unavailable".into()));
+    }
+    for (name, metadata, kind, codec) in [
+        (
+            "fake.braw",
+            json!({"File:FileType":"JPEG"}),
+            "photo",
+            "JPEG",
+        ),
+        (
+            "fake.nev",
+            json!({"File:FileType":"MOV","Track1:CompressorID":"hvc1"}),
+            "video",
+            "HEVC",
+        ),
+        (
+            "fake.crm",
+            json!({"File:FileType":"TXT","Track1:CompressorID":"aprn"}),
+            "other",
+            "Unknown",
+        ),
+    ] {
+        let f = describe(name.into(), 4, 0, &metadata);
+        assert_eq!((&*f.kind, &*f.codec), (kind, codec));
+    }
+}
+
+#[test]
+fn raw_track_names_and_mxf_labels_require_explicit_encoding_evidence() {
+    for (tag, name, codec) in [
+        ("Track1:CompressorName", "Blackmagic RAW", "Blackmagic_RAW"),
+        ("Track3:CompressorName", "Nikon N-RAW", "N_RAW"),
+        (
+            "QuickTime:CompressorName",
+            "Apple ProRes RAW HQ",
+            "ProRes_RAW",
+        ),
+        ("MXF:VideoCompressionAlgorithm", "ARRIRAW (HDE)", "ARRIRAW"),
+        ("MXF:VideoCompressionAlgorithm", "Sony X-OCN ST", "X_OCN"),
+        ("QuickTime:CompressorName", "Phantom Cine RAW", "Cine_RAW"),
+    ] {
+        let mut metadata = json!({"File:FileType":if tag.starts_with("MXF:") {"MXF"} else {"MOV"}});
+        metadata[tag] = json!(name);
+        let f = describe("clip.mov".into(), 4, 0, &metadata);
+        assert_eq!(f.codec, codec);
+        assert!(is_raw_video_codec(&f.codec));
+    }
+    let raw = describe(
+        "external.mov".into(),
+        4,
+        0,
+        &json!({"File:FileType":"MOV","Track1:CompressorID":"mp4a","Track3:CompressorID":"aprh"}),
+    );
+    assert_eq!(raw.codec, "ProRes_RAW");
+    for metadata in [
+        json!({"File:FileType":"MXF","IFD0:Model":"Sony VENICE"}),
+        json!({"File:FileType":"MXF","IFD0:Model":"ARRI ALEXA"}),
+        json!({"File:FileType":"CINE"}),
+        json!({"File:FileType":"MOV","Track1:CompressorID":"raw ","Track1:CompressorName":"RAW"}),
+        json!({"File:FileType":"MOV","UserData:Title":"Blackmagic RAW"}),
+    ] {
+        let f = describe("clip.nev".into(), 4, 0, &metadata);
+        assert_eq!(f.codec, "Unknown");
+        assert!(f.issues.contains(&"unknown_codec".into()));
+    }
+    let non_raw = describe(
+        "clip.braw".into(),
+        4,
+        0,
+        &json!({"File:FileType":"MOV","Track1:CompressorID":"apch","Track1:CompressorName":"ProRes RAW"}),
+    );
+    assert_eq!(non_raw.codec, "ProRes");
+}
+
+#[test]
+fn raw_tracks_take_priority_over_preview_tracks_without_trusting_conflicting_names() {
+    for (identifier, expected) in [("aprh", "ProRes_RAW"), ("brhq", "Blackmagic_RAW")] {
+        let f = describe(
+            "clip.mov".into(),
+            4,
+            0,
+            &json!({"File:FileType":"MOV","Track1:CompressorID":"avc1","Track2:CompressorID":identifier}),
+        );
+        assert_eq!(f.codec, expected);
+    }
+    let named = describe(
+        "clip.mov".into(),
+        4,
+        0,
+        &json!({"File:FileType":"MOV","Track1:CompressorID":"avc1","Track2:CompressorName":"Nikon N-RAW"}),
+    );
+    assert_eq!(named.codec, "N_RAW");
+    for (identifier, expected) in [("avc1", "H264"), ("apch", "ProRes"), ("raw ", "Unknown")] {
+        let f = describe(
+            "clip.mov".into(),
+            4,
+            0,
+            &json!({"File:FileType":"MOV","Track1:CompressorID":identifier,"Track1:CompressorName":"ProRes RAW"}),
+        );
+        assert_eq!(f.codec, expected);
+    }
+}
+
+#[test]
+fn still_raw_formats_are_not_raw_video_or_cinemadng_sequences() {
+    for format in [
+        "CR3", "NEF", "ARW", "DNG", "3FR", "FFF", "IIQ", "RWL", "SRW", "X3F", "GPR", "MRW", "ERF",
+        "MEF", "MOS", "DCR", "KDC", "K25", "ORI", "RAW",
+    ] {
+        let f = describe(
+            "frame.mov".into(),
+            4,
+            0,
+            &json!({"File:FileType":format,"Track1:CompressorID":"aprn"}),
+        );
+        assert_eq!((&*f.kind, &*f.codec), ("photo", "RAW"));
+        assert!(!is_raw_video_codec(&f.codec));
+    }
+    // The generic .raw suffix alone is not enough to distinguish still/video.
+    assert_eq!(
+        describe("unknown.raw".into(), 4, 0, &serde_json::Value::Null).kind,
+        "other"
+    );
+    let f = describe("frame.dng".into(), 4, 0, &serde_json::Value::Null);
+    assert_eq!((&*f.kind, &*f.codec), ("photo", "RAW"));
+}
+
+#[test]
+fn aggregate_raw_filter_keeps_concrete_folders_and_companions() {
+    let root = tempfile::tempdir().unwrap();
+    let dest = tempfile::tempdir().unwrap();
+    let mut files = Vec::new();
+    for (name, format) in [
+        ("canon.CRM", "CRM"),
+        ("blackmagic.BRAW", "BRAW"),
+        ("red.R3D", "R3D"),
+        ("nikon.NEV", "NEV"),
+        ("arri.ARI", "ARI"),
+        ("photo.DNG", "DNG"),
+        ("regular.MP4", "MP4"),
+        ("canon.XML", "XML"),
+    ] {
+        files.push(media(name, format, "2026:10:06 18:00:00"));
+    }
+    let mut prores = media("external.MOV", "MOV", "2026:10:06 18:00:00");
+    prores.codec = "ProRes_RAW".into();
+    files.push(prores);
+    let c = catalog(root.path(), files);
+    let mut o = options(dest.path());
+    o.photos = false;
+    o.codec = "RAW".into();
+    let p = preview(&c, o.clone(), Utc::now()).unwrap();
+    assert_eq!(p.groups, 6);
+    assert_eq!(p.rows.len(), 7);
+    assert!(
+        p.rows
+            .iter()
+            .all(|r| r.kind == "other" || is_raw_video_codec(&r.codec))
+    );
+    assert!(
+        p.rows
+            .iter()
+            .any(|r| r.destination.contains("/Video/Blackmagic_RAW/"))
+    );
+    assert!(
+        p.rows
+            .iter()
+            .any(|r| r.destination.contains("/Video/RED_RAW/"))
+    );
+    assert!(
+        p.rows
+            .iter()
+            .any(|r| r.source == "canon.XML" && r.destination.contains("/Video/Canon_RAW/"))
+    );
+    assert_eq!(
+        selection_summary(&c, &o, Utc::now()).unwrap().files,
+        p.rows.len()
+    );
+    o.codec = "Blackmagic_RAW".into();
+    assert_eq!(
+        preview(&c, o.clone(), Utc::now()).unwrap().rows[0].source,
+        "blackmagic.BRAW"
+    );
+    assert_eq!(selection_summary(&c, &o, Utc::now()).unwrap().files, 1);
+    o.codec = "RAW".into();
+    o.photos = true;
+    assert_eq!(selection_summary(&c, &o, Utc::now()).unwrap().files, 8);
+    o.videos = false;
+    let photos = preview(&c, o, Utc::now()).unwrap();
+    assert_eq!(photos.rows.len(), 1);
+    assert_eq!(photos.rows[0].source, "photo.DNG");
+}
 #[test]
 fn companions_match_same_folder_and_survive_type_filter() {
     let files = vec![
@@ -427,4 +640,47 @@ fn selection_summary_matches_preview_and_resolved_dates_with_companions() {
     assert_eq!(selection_summary(&c, &o, now).unwrap().files, 1);
     o.timezone = "Invalid/Zone".into();
     assert!(selection_summary(&c, &o, now).is_err());
+}
+
+#[test]
+fn insp_images_remain_non_raw_photos() {
+    for metadata in [json!({"File:FileType":"INSP"}), serde_json::Value::Null] {
+        let f = describe("panorama.insp".into(), 4, 0, &metadata);
+        assert_eq!((&*f.kind, &*f.codec), ("photo", "INSP"));
+    }
+    assert_eq!(media("panorama.insp", "JPEG", "").codec, "JPEG");
+}
+
+#[test]
+fn raw_selection_finds_media_behind_same_name_video_proxy() {
+    let root = tempfile::tempdir().unwrap();
+    let dest = tempfile::tempdir().unwrap();
+    let c = catalog(
+        root.path(),
+        vec![
+            media("take.MP4", "MP4", "2026:10:06 18:00:00"),
+            media("take.NEV", "NEV", "2026:10:06 18:00:00"),
+            media("take.XML", "XML", ""),
+        ],
+    );
+    assert_eq!(c.groups.len(), 1);
+    assert_eq!(c.groups[0].files[0].codec, "HEVC");
+    let mut o = options(dest.path());
+    o.photos = false;
+    for filter in ["RAW", "N_RAW", "HEVC"] {
+        o.codec = filter.into();
+        let p = preview(&c, o.clone(), Utc::now()).unwrap();
+        assert_eq!(p.groups, 1);
+        assert_eq!(p.rows.len(), 3);
+        assert!(
+            p.rows
+                .iter()
+                .any(|row| row.source == "take.NEV" && row.destination.contains("/N_RAW/"))
+        );
+        assert!(
+            p.rows
+                .iter()
+                .any(|row| row.source == "take.MP4" && row.destination.contains("/HEVC/"))
+        );
+    }
 }

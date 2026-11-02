@@ -1,3 +1,4 @@
+import {videoCodecChoices} from './videoCodecs';
 import {useEffect,useState} from 'react';
 import {ChevronRight,SlidersHorizontal} from 'lucide-react';
 import type {Catalog,Options,Settings} from './types';
@@ -41,7 +42,7 @@ export default function SimpleImportOptions({options,settings,catalog,counts,dis
   const media=([{key:'photos',kind:'photo'},{key:'videos',kind:'video'},{key:'others',kind:'other'}] as const);
   const selectedMedia=media.filter(({key})=>options[key]).map(({key})=>t(key));
   const dateSummary=options.from&&options.to?(options.from===options.to?options.from:`${options.from} – ${options.to}`):options.from?`${text.since} ${options.from}`:options.to?`${text.until} ${options.to}`:t('allDates');
-  const codecChoices=Array.from(new Set([...(catalog?.codecs??[]),...(options.codec?[options.codec]:[])]));
+  const codecChoices=videoCodecChoices(catalog?.codecs,options.codec);
   const ruleCodecs=Array.from(new Set(catalog?.groups.flatMap(group=>group.files.map(file=>file.codec))??['RAW','JPEG','HEVC','H264','Canon_RAW']));
   const timeChanged=options.time_mode!=='camera'||options.shift_minutes!==0;
   return <fieldset className="simple-import-options" disabled={disabled} aria-label={text.options}>
@@ -64,7 +65,7 @@ export default function SimpleImportOptions({options,settings,catalog,counts,dis
     <section className="simple-active-filters" aria-label={text.active} aria-live="polite">
       <h2>{text.active}</h2>
       <p>{dateSummary} · {selectedMedia.join(' / ')||text.noTypes} · {options.unknown_dates?text.undatedIncluded:text.undatedExcluded}</p>
-      <p>{t('codec')}: <strong>{options.codec||t('allCodecs')}</strong></p>
+      <p>{t('codec')}: <strong>{options.codec==='RAW'?t('rawVideoCodecs'):options.codec||t('allCodecs')}</strong></p>
       <p>{t('timeRules')}: <strong>{t(options.time_mode==='camera'?'cameraTime':'locationTime')}</strong> · {options.timezone}{options.shift_minutes!==0?` · ${options.shift_minutes>0?'+':''}${options.shift_minutes} ${text.minutes}`:` · ${text.noCorrection}`}</p>
     </section>
 
@@ -81,7 +82,7 @@ export default function SimpleImportOptions({options,settings,catalog,counts,dis
     <details className="simple-advanced" open={advanced} onToggle={event=>setAdvanced(event.currentTarget.open)}>
       <summary><ChevronRight className="simple-disclosure-chevron" size={16}/><SlidersHorizontal size={16}/>{text.more}</summary>
       {advanced&&<div className="simple-advanced-body">
-        <section className="panel"><label>{t('codec')}<select value={options.codec} onChange={event=>onChange({codec:event.target.value})}><option value="">{t('allCodecs')}</option>{codecChoices.map(codec=><option key={codec}>{codec}</option>)}</select></label></section>
+        <section className="panel"><label>{t('codec')}<select value={options.codec} onChange={event=>onChange({codec:event.target.value})}><option value="">{t('allCodecs')}</option>{codecChoices.map(codec=><option key={codec} value={codec}>{codec==='RAW'?t('rawVideoCodecs'):codec}</option>)}</select></label></section>
         <section className="panel">
           <div className="section-title"><h2>{t('timeRules')}</h2>{timeChanged&&<button type="button" className="text-button" onClick={()=>onChange({time_mode:'camera',shift_minutes:0})}>{text.resetTime}</button>}</div>
           <label><span className="sr-only">{t('timeRules')}</span><select value={options.time_mode} onChange={event=>onChange({time_mode:event.target.value as Options['time_mode']})}><option value="camera">{t('cameraTime')}</option><option value="location">{t('locationTime')}</option></select></label>
