@@ -4,9 +4,9 @@
 
 [简体中文](README.zh-CN.md) · English
 
-A desktop tool for importing photos and videos from memory cards and folders. Choose files, configure destination folders and filenames, preview the result, then copy with SHA-256 verification.
+A free, open-source media ingest tool for film production and personal creators. Import photos and videos from memory cards or folders, configure destination folders and filenames, and preview the result before copying. SHA-256 content verification is enabled by default.
 
-**Development preview (0.3).** macOS has been tested with Canon EOS R5 Mark II media. CI tests the installed Windows x64 app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation.
+**1.0.0 is the first stable release.** macOS has been tested with Canon EOS R5 Mark II media. CI tests the installed Windows x64 app through real WebView2 using synthetic media. Physical Windows PCs, card readers, and other camera formats still need validation.
 
 ## Download
 
@@ -15,11 +15,11 @@ A desktop tool for importing photos and videos from memory cards and folders. Ch
 - **macOS 13+:** open the DMG and drag the app to Applications. The app is ad-hoc signed, without Apple Developer ID signing or notarization; Gatekeeper may block the first launch.
 - **Windows 10 1903+ / Windows 11:** run the installer. WebView2 is required; the installer can download it when missing. The installer is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.
 
-See [release packaging and validation](docs/release-validation.md) for the tested environments and limitations. These are preview releases; keep another copy of important source media.
+See [release packaging and validation](docs/release-validation.md) for the tested environments, signing status and remaining checks.
 
-## What changed in 0.3.0
+## 1.0.0
 
-Simple import is now the default, with the detailed workflow still available. This release adds scan cancellation, device refresh, a directory/file switch in final preview, stage progress and opening the completed destination. Existing rules, verification settings and task records remain compatible. See the [release notes](https://github.com/wzk112/Framemoor/releases/tag/v0.3.0).
+The first stable release includes simple import and the detailed five-step workflow. Both views offer **RAW (all types)** alongside individual video codecs, while destination rules retain the concrete codec names. It expands photo RAW recognition, adds INSP photo classification, and improves RAW video track recognition and selection of grouped proxies. See the bilingual [release notes](docs/releases/v1.0.0.md) and [changelog](CHANGELOG.md).
 
 ## Features
 
@@ -33,7 +33,7 @@ Simple import is now the default, with the detailed workflow still available. Th
 
 Scanning first lists files and classifies them by extension, then reads metadata in the background. Codec filters and import previews wait for metadata to finish. Scanning can be cancelled; a new scan waits for the previous readers to stop. Every scan reads the source again; there is no persistent metadata or checksum cache.
 
-See [media formats and recognition](docs/media-formats.md) for common brands, RAW video filtering, and the distinction between released 0.3.0 behavior and unreleased additions.
+See [media formats and recognition](docs/media-formats.md) for the formats classified in 1.0.0, RAW video filtering and the validation scope for each category.
 
 ## Verification
 
