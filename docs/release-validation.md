@@ -2,7 +2,7 @@
 
 ## Packages
 
-Version 0.3.0 is a development preview. The release provides macOS Apple Silicon and Windows x64 installers, corresponding source, dependency notices, and SHA-256 checksums. Do not describe these packages as signed/notarized production releases.
+Version 1.0.0 is the first stable release, with macOS Apple Silicon and Windows x64 installers, corresponding source, dependency notices, and SHA-256 checksums. The release status does not change the signing or hardware-validation scope described below.
 
 | Platform | Package | Requirements | Signing |
 | --- | --- | --- | --- |
@@ -11,9 +11,11 @@ Version 0.3.0 is a development preview. The release provides macOS Apple Silicon
 
 The app bundles ExifTool 13.59 and license notices. `notices/SOURCE.txt` identifies the source revision and Rust target. `prepare-notices.py` selects the host target unless `--target` is supplied; fallbacks are version- and checksum-bound to upstream material. The macOS Release profile retains optimization and thin LTO but disables stripping: Rust 1.90 can produce misaligned Mach-O string pools that macOS 27 rejects ([upstream issue](https://github.com/rust-lang/rust/issues/157750)).
 
-## 0.3.0 validation scope
+## 1.0.0 validation scope
 
-The simple and detailed views share the existing import engine. Browser tests exercise both languages, light/dark layouts, retained drafts, cancellation/retry and warning acknowledgements using mocked IPC. Core regressions cover cancelling metadata workers and descendant processes without retaining a partial catalog. Windows CI exercises the installed app through real WebView2 on a Windows Server VM, including Chinese simple and English detailed imports. macOS package and startup checks are recorded separately from interactive UI checks; the 0.2.0 interactive results below are historical, not a fresh validation of the 0.3.0 interface. The release notes identify the final tested commit and any remaining limits.
+The simple and detailed views share the existing import engine. Browser tests exercise both languages, light/dark layouts, retained drafts, cancellation/retry, warning acknowledgements and RAW video selection using mocked IPC. Core regressions cover metadata-worker cancellation, content-first format classification, RAW track priority, grouped proxies and concrete codec directories. Synthetic files are also read by the packaged ExifTool. These checks cover classification and filtering, not playback or decoding. The format-specific evidence and remaining camera tests are listed in [media formats and recognition](media-formats.md).
+
+Windows CI exercises the installed app through real WebView2 on a Windows Server VM, including Chinese simple and English detailed imports. macOS package/startup checks and interactive UI checks are recorded separately. The 0.2.0 interactive results below are historical and do not establish that the final 1.0.0 package has passed those checks. The published release must identify the final tested commit and package results; the publishing steps below apply to that exact build.
 
 ## Native checks for 0.2.0, 2026-10-27
 
@@ -35,17 +37,19 @@ Windows CI installs and exercises the actual Release installer on a Windows Serv
 3. Publish a version tag, both installers, corresponding source, notices and `SHA256SUMS.txt` together. Keep personal test records and absolute user paths out of published evidence.
 4. Check the public release assets, sizes and SHA-256 digests after upload. CI artifact retention alone is not a release archive.
 
-The minimum OS versions are build targets, not a claim that every OS version has been tested. Intel Mac, Windows ARM64, Gatekeeper/SmartScreen reputation, IME composition, notification delivery, card removal, power loss, full disks, and network/ExFAT volumes require additional device testing. macOS local tests do not reproduce quarantine behavior after a browser download. No global security settings should be disabled to install the preview.
+The minimum OS versions are build targets, not a claim that every OS version has been tested. Intel Mac, Windows ARM64, Gatekeeper/SmartScreen reputation, IME composition, notification delivery, card removal, power loss, full disks, and network/ExFAT volumes require additional device testing. macOS local tests do not reproduce quarantine behavior after a browser download. No global security settings should be disabled to install the app.
 
 ## 安装包
 
-0.3.0 是开发预览版，提供 macOS Apple Silicon 与 Windows x64 安装包、对应源码、依赖声明和 SHA-256。macOS 需要 13+，DMG 中包含应用及“应用程序”快捷方式，采用 ad-hoc 签名，未使用 Developer ID 签名或公证。Windows 需要 10 1903+ 或 Windows 11 以及 WebView2，NSIS 按当前用户安装，安装包未签名。
+1.0.0 是首个正式版，提供 macOS Apple Silicon 与 Windows x64 安装包、对应源码、依赖声明和 SHA-256。正式版的命名不改变下文的签名状态与硬件验证范围。macOS 需要 13+，DMG 中包含应用及“应用程序”快捷方式，采用 ad-hoc 签名，未使用 Developer ID 签名或公证。Windows 需要 10 1903+ 或 Windows 11 以及 WebView2，NSIS 按当前用户安装，安装包未签名。
 
 应用包含 ExifTool 13.59 与许可证，`notices/SOURCE.txt` 记录源码版本和 Rust 目标。声明脚本默认选择宿主目标，也可传入 `--target`；补充声明固定上游版本和校验值。macOS Release 保留优化与 thin LTO，仅关闭符号裁剪，避免 Rust 1.90 生成 macOS 27 拒绝加载的 Mach-O 文件，见上方上游问题链接。
 
-## 0.3.0 验证范围
+## 1.0.0 验证范围
 
-简易视图与详细视图共用现有导入引擎。浏览器测试通过模拟 IPC 检查中英双语、浅深色布局、配置保留、取消后重试与提示确认；核心回归测试检查元数据工作线程及其子进程取消，并确保不保留不完整的扫描清单。Windows CI 在 Windows Server 虚拟机中，通过真实 WebView2 验证安装后的中文简易流程和英文详细流程。macOS 的安装包与启动检查和交互界面检查分别记录；下方 0.2.0 的交互测试是历史结果，不代表 0.3.0 界面已重新验证。发行说明记录最终测试提交及剩余限制。
+简易视图与详细视图共用现有导入引擎。浏览器测试通过模拟 IPC 检查中英双语、浅深色布局、配置保留、取消后重试、提示确认与 RAW 视频筛选。核心回归测试覆盖元数据工作线程取消、内容优先分类、RAW 轨道优先级、同组代理文件与具体编码目录，并使用随包 ExifTool 读取合成文件。这些检查覆盖分类和筛选，不代表播放或解码能力；各类格式的实际证据与待验证项目见[素材格式与识别范围](media-formats.zh-CN.md)。
+
+Windows CI 在 Windows Server 虚拟机中，通过真实 WebView2 验证安装后的中文简易流程和英文详细流程。macOS 的安装包／启动检查与交互界面检查分别记录，下方 0.2.0 的交互结果属于历史记录，不能据此认定最终 1.0.0 安装包已通过相同检查。公开发行记录须标明最终测试提交与安装包结果，下方发布流程针对这一确切构建执行。
 
 ## 0.2.0 原生验证，2026-10-27
 
@@ -62,4 +66,4 @@ Windows CI 在 Windows Server 虚拟机中安装实际 Release 包，测试原�
 
 发布前必须经 PR 和所有必需检查；两个安装包取自同一审查后的提交，复查源码版本、资源与架构，并复测最终 macOS 应用。Release 同时保存版本标签、安装包、源码、声明及 SHA-256，上传后核对公开资产。不得公开个人测试记录和绝对用户路径，也不把有过期时间的 CI 产物当作发行归档。
 
-最低系统版本是构建目标，不代表逐个版本均已实测。Intel Mac、Windows ARM64、Gatekeeper/SmartScreen 信誉、输入法组合输入、通知送达、拔卡、掉电、磁盘耗尽及网络/ExFAT 卷仍需设备验证。本地 macOS 测试未复现浏览器下载后的隔离属性行为；不应为安装预览版关闭全局系统安全设置。
+最低系统版本是构建目标，不代表逐个版本均已实测。Intel Mac、Windows ARM64、Gatekeeper/SmartScreen 信誉、输入法组合输入、通知送达、拔卡、掉电、磁盘耗尽及网络/ExFAT 卷仍需设备验证。本地 macOS 测试未复现浏览器下载后的隔离属性行为；不应为安装应用关闭全局系统安全设置。
